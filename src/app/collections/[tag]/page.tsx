@@ -108,25 +108,16 @@ export default function CollectionPage() {
         });
       }
 
-      // 2. Fetch Products
-      let q;
+      // 2. Fetch Products (Bypass Firebase composite index by filtering in JS)
       const baseQuery = process.env.NEXT_PUBLIC_VENDOR_UID ? collection(db, "users", vendorUid, "nail_sets") : collectionGroup(db, "nail_sets");
-      
-      if (tag === "special-offers") {
-        q = query(baseQuery, where("isForSale", "==", true), where("isPromo", "==", true));
-      } else if (tag === "all") {
-        q = query(baseQuery, where("isForSale", "==", true));
-      } else {
-        q = query(baseQuery, where("isForSale", "==", true), where("tags", "array-contains", tag));
-      }
-
+      const q = query(baseQuery, where("isForSale", "==", true));
       const snapshot = await getDocs(q);
 
       // Fetch the Android app's separate multi-photo collection
       const imagesSnapshot = await getDocs(collectionGroup(db, "set_images"));
       const allSetImages = imagesSnapshot.docs.map(doc => doc.data());
 
-      const fetchedProducts = snapshot.docs.map(d => {
+      let fetchedProducts = snapshot.docs.map(d => {
         const data = d.data();
         const syncId = data.syncId || d.id;
         
@@ -172,6 +163,13 @@ export default function CollectionPage() {
           syncId
         };
       });
+
+      // Filter products based on the current collection tag
+      if (tag === "special-offers") {
+        fetchedProducts = fetchedProducts.filter(p => p.isPromo);
+      } else if (tag !== "all") {
+        fetchedProducts = fetchedProducts.filter(p => p.tags && p.tags.includes(tag));
+      }
 
       setProducts(fetchedProducts);
     } catch (error) {
