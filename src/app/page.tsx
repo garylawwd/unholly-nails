@@ -75,12 +75,7 @@ export default function Home() {
       }));
       setRibbonCollections(ribbons as any);
 
-      let q;
-      if (process.env.NEXT_PUBLIC_VENDOR_UID) {
-        q = query(collection(db, "users", vendorUid, "nail_sets"), where("isForSale", "==", true));
-      } else {
-        q = query(collectionGroup(db, "nail_sets"), where("isForSale", "==", true));
-      }
+      const q = query(collection(db, "users", vendorUid, "nail_sets"), where("isForSale", "==", true));
 
       const snapshot = await getDocs(q);
 

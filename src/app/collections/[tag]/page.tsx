@@ -109,7 +109,7 @@ export default function CollectionPage() {
       }
 
       // 2. Fetch Products (Bypass Firebase composite index by filtering in JS)
-      const baseQuery = process.env.NEXT_PUBLIC_VENDOR_UID ? collection(db, "users", vendorUid, "nail_sets") : collectionGroup(db, "nail_sets");
+      const baseQuery = collection(db, "users", vendorUid, "nail_sets");
       const q = query(baseQuery, where("isForSale", "==", true));
       const snapshot = await getDocs(q);
 
