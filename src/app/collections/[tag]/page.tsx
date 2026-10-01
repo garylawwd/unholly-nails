@@ -176,9 +176,9 @@ export default function CollectionPage() {
         const mappedType = topLevelMap[tag.toLowerCase()];
         if (mappedType) {
           if (mappedType === "Basics") {
-            fetchedProducts = fetchedProducts.filter(p => p.type === "Basics" || p.type === "Sizing Kit" || (p.tags && p.tags.includes("basics")));
+            fetchedProducts = fetchedProducts.filter(p => p.type?.toLowerCase() === "basics" || p.type?.toLowerCase() === "sizing kit" || (p.tags && p.tags.map((t: string)=>t.toLowerCase()).includes("basics")));
           } else {
-            fetchedProducts = fetchedProducts.filter(p => p.type === mappedType);
+            fetchedProducts = fetchedProducts.filter(p => p.type?.toLowerCase() === mappedType.toLowerCase() || (p.tags && p.tags.map((t: string)=>t.toLowerCase()).includes(mappedType.toLowerCase())));
           }
         } else {
           const includedIds = collectionInfo?.includedProductIds;
