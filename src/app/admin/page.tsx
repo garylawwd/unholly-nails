@@ -303,7 +303,6 @@ export default function AdminDashboard() {
         
         // Only delete old one if it wasn't a brand new unsaved page
         if (selectedTag !== "new-custom-page") {
-           const { deleteDoc } = require("firebase/firestore");
            await deleteDoc(doc(db, "users", STORE_OWNER_UID, "collection_settings", selectedTag));
         }
         
@@ -525,39 +524,43 @@ export default function AdminDashboard() {
                   </div>
                 ) : (
                   <form onSubmit={saveCollectionMeta} className="flex flex-col h-full">
-                    <div className="p-6 border-b bg-neutral-50 flex items-center justify-between">
-                      <div>
-                        <h3 className="font-black text-xl">Design /{selectedTag}</h3>
-                        <p className="text-xs text-neutral-500 mt-1">unhollynails.com/collections/{selectedTag.toLowerCase().replace(/\s+/g, '-')}</p>
+                    <div className="p-4 sm:p-6 border-b bg-neutral-50 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div className="min-w-0">
+                        <h3 className="font-black text-xl truncate">Design /{selectedTag}</h3>
+                        <p className="text-xs text-neutral-500 mt-1 truncate">unhollynails.com/collections/{selectedTag.toLowerCase().replace(/\s+/g, '-')}</p>
                       </div>
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2 sm:gap-3 shrink-0">
                         {!["all", "special-offers", "sets", "keychains", "earrings", "accessories", "basics", "new-custom-page"].includes(selectedTag) && (
                           <button 
                             type="button" 
                             onClick={async () => {
                               if (window.confirm("Are you sure you want to delete this custom page?")) {
-                                const { deleteDoc, doc } = require("firebase/firestore");
-                                await deleteDoc(doc(db, "users", STORE_OWNER_UID, "collection_settings", selectedTag));
-                                setCollectionMetadata(prev => {
-                                  const next = { ...prev };
-                                  delete next[selectedTag];
-                                  return next;
-                                });
-                                setSelectedTag(null);
+                                try {
+                                  await deleteDoc(doc(db, "users", STORE_OWNER_UID, "collection_settings", selectedTag));
+                                  setCollectionMetadata(prev => {
+                                    const next = { ...prev };
+                                    delete next[selectedTag];
+                                    return next;
+                                  });
+                                  setSelectedTag(null);
+                                } catch(e) {
+                                  console.error("Delete failed", e);
+                                  alert("Failed to delete page.");
+                                }
                               }
                             }}
-                            className="bg-red-50 text-red-600 px-4 py-2 rounded-lg font-bold hover:bg-red-100 transition text-sm"
+                            className="bg-red-50 text-red-600 px-4 py-2 rounded-lg font-bold hover:bg-red-100 transition text-sm whitespace-nowrap"
                           >
                             Delete
                           </button>
                         )}
-                        <button type="submit" disabled={savingCollection} className="bg-black text-white px-6 py-2 rounded-lg font-bold hover:bg-neutral-800 disabled:opacity-50 text-sm">
+                        <button type="submit" disabled={savingCollection} className="bg-black text-white px-6 py-2 rounded-lg font-bold hover:bg-neutral-800 disabled:opacity-50 text-sm whitespace-nowrap">
                           {savingCollection ? "Saving..." : "Save Page"}
                         </button>
                       </div>
                     </div>
 
-                    <div className="p-6 space-y-6 overflow-y-auto max-h-[70vh]">
+                    <div className="p-4 sm:p-6 space-y-6 overflow-y-auto max-h-[70vh]">
                       {!["all", "special-offers", "sets", "keychains", "earrings", "accessories", "basics"].includes(selectedTag) && (
                         <div>
                           <label className="block text-xs font-bold text-neutral-500 uppercase mb-2">Page URL Slug</label>
