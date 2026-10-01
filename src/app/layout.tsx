@@ -17,15 +17,32 @@ export const metadata: Metadata = {
   description: "Luxury Press-On Artistry",
 };
 
+import GlobalHeader from "@/components/GlobalHeader";
+import GlobalFooter from "@/components/GlobalFooter";
+import { CartProvider } from "@/context/CartContext";
+import { AdminProvider } from "@/context/AdminContext";
+import CartDrawer from "@/components/CartDrawer";
+import GlobalProductEditor from "@/components/GlobalProductEditor";
+
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" className="h-full">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-full flex flex-col`}>
-        {children}
+        <AdminProvider>
+          <CartProvider>
+            <GlobalHeader />
+            <CartDrawer />
+            <main className="flex-grow flex flex-col">
+              {children}
+            </main>
+            <GlobalFooter />
+            <GlobalProductEditor />
+          </CartProvider>
+        </AdminProvider>
       </body>
     </html>
   );

@@ -2,11 +2,11 @@
 
 import { useState, useEffect, useMemo, useRef } from "react";
 import Image from "next/image";
-import { collection, collectionGroup, getDocs, doc, writeBatch, setDoc, getDoc } from "firebase/firestore";
+import { collection, collectionGroup, getDocs, doc, writeBatch, setDoc, getDoc, deleteDoc } from "firebase/firestore";
 import { signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged, User } from "firebase/auth";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, auth, storage } from "@/lib/firebase";
-import { Product } from "@/app/page"; // reuse interface
+import { Product } from "@/lib/types";
 
 interface CollectionMeta {
   tag: string;
@@ -15,12 +15,15 @@ interface CollectionMeta {
   backgroundImageUrl: string;
   inRibbon?: boolean;
   headerColor?: string;
-  headerBgColor?: string;
   descriptionColor?: string;
   ombreStart?: string;
   ombreEnd?: string;
   bgScale?: number;
+  includedProductIds?: string[];
 }
+
+const STORE_OWNER_UID = process.env.NEXT_PUBLIC_VENDOR_UID || "CMzpkonBxKeLboaVTUYwDWgiwNG3";
+const VALID_ADMINS = ["0TMvGP1VIja7VzVM87MPQaacoY03", "CMzpkonBxKeLboaVTUYwDWgiwNG3"];
 
 export default function AdminDashboard() {
   const [user, setUser] = useState<User | null>(null);
@@ -36,24 +39,39 @@ export default function AdminDashboard() {
   
   const [collectionMetadata, setCollectionMetadata] = useState<Record<string, CollectionMeta>>({});
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [savingCollection, setSavingCollection] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [savingProduct, setSavingProduct] = useState(false);
   
   const bgInputRef = useRef<HTMLInputElement>(null);
+  const productImgRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
       setLoadingAuth(false);
-      if (currentUser) {
-        fetchInventory(currentUser.uid);
+      if (currentUser && VALID_ADMINS.includes(currentUser.uid)) {
+        setUser(currentUser);
+        fetchInventory(STORE_OWNER_UID);
+      } else {
+        setUser(null);
       }
     });
     return () => unsubscribe();
   }, []);
 
   const handleLogin = async () => {
-    const provider = new GoogleAuthProvider();
-    await signInWithPopup(auth, provider);
+    try {
+      const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: 'select_account' });
+      const result = await signInWithPopup(auth, provider);
+      if (!VALID_ADMINS.includes(result.user.uid)) {
+        await signOut(auth);
+        alert(`Access Denied: Your account (${result.user.uid}) does not have administrator privileges.`);
+      }
+    } catch (err) {
+      console.error("Admin login failed:", err);
+    }
   };
 
   const fetchInventory = async (uid: string) => {
@@ -111,13 +129,14 @@ export default function AdminDashboard() {
           tags: data.tags || [],
           syncId: syncId,
           isForSale: data.isForSale === true,
+          type: data.type || 'Sets'
         } as Product & { isForSale: boolean };
       });
       setInventory(items);
       
       // Extract unique tags and fetch their metadata
       const tags = new Set<string>();
-      items.forEach(i => i.tags?.forEach(t => tags.add(t)));
+      items.forEach(i => i.tags?.forEach((t: string) => tags.add(t)));
       
       const metaRecord: Record<string, CollectionMeta> = {};
       for (const tag of Array.from(tags)) {
@@ -137,15 +156,10 @@ export default function AdminDashboard() {
   };
 
   const uniqueTags = useMemo(() => {
-    const tags = new Set<string>();
-    inventory.forEach(p => p.tags?.forEach(t => tags.add(t)));
-    
-    const arr = Array.from(tags).sort();
-    if (!arr.includes("special-offers")) arr.unshift("special-offers");
-    if (!arr.includes("all")) arr.unshift("all");
-    
-    return arr;
-  }, [inventory]);
+    const basePages = ["all", "special-offers", "sets", "keychains", "earrings", "accessories", "basics"];
+    const customPages = Object.keys(collectionMetadata).filter(k => !basePages.includes(k));
+    return [...basePages, ...customPages];
+  }, [collectionMetadata]);
 
   const toggleSelection = (id: string) => {
     const newSet = new Set(selectedIds);
@@ -213,6 +227,44 @@ export default function AdminDashboard() {
     }
   };
 
+  const saveProductDetails = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingProduct) return;
+    setSavingProduct(true);
+    try {
+      let newImgUrl = editingProduct.imagePath;
+
+      if (productImgRef.current?.files && productImgRef.current.files.length > 0) {
+        const file = productImgRef.current.files[0];
+        const storageReference = ref(storage, `users/${STORE_OWNER_UID}/images/product_${Date.now()}_${file.name}`);
+        await uploadBytes(storageReference, file);
+        newImgUrl = await getDownloadURL(storageReference);
+      }
+
+      const updatedProduct = {
+        ...editingProduct,
+        imagePath: newImgUrl || "",
+        description: editingProduct.description || "",
+        updatedAt: Date.now()
+      };
+
+      await setDoc(doc(db, editingProduct.docPath), updatedProduct, { merge: true });
+      
+      setInventory(prev => {
+        const exists = prev.find(p => p.id === updatedProduct.id);
+        if (exists) return prev.map(p => p.id === updatedProduct.id ? updatedProduct : p);
+        return [updatedProduct, ...prev];
+      });
+      alert("Product saved successfully!");
+      setEditingProduct(null);
+    } catch (err) {
+      console.error(err);
+      alert("Failed to save product.");
+    } finally {
+      setSavingProduct(false);
+    }
+  };
+
   const saveCollectionMeta = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !selectedTag) return;
@@ -236,15 +288,37 @@ export default function AdminDashboard() {
 
       if (bgInputRef.current?.files && bgInputRef.current.files.length > 0) {
         const file = bgInputRef.current.files[0];
-        const storageReference = ref(storage, `users/${user.uid}/images/bg_${Date.now()}_${file.name}`);
+        const storageReference = ref(storage, `users/${STORE_OWNER_UID}/images/bg_${Date.now()}_${file.name}`);
         await uploadBytes(storageReference, file);
         newImageUrl = await getDownloadURL(storageReference);
       }
 
       const updatedMeta = { ...meta, backgroundImageUrl: newImageUrl || "" };
-      await setDoc(doc(db, "users", user.uid, "collection_settings", selectedTag), updatedMeta);
       
-      setCollectionMetadata(prev => ({ ...prev, [selectedTag]: updatedMeta }));
+      if (updatedMeta.tag && updatedMeta.tag !== selectedTag) {
+        // They renamed the custom slug!
+        const newSlug = updatedMeta.tag.toLowerCase().replace(/\s+/g, '-');
+        updatedMeta.tag = newSlug;
+        await setDoc(doc(db, "users", STORE_OWNER_UID, "collection_settings", newSlug), updatedMeta);
+        
+        // Only delete old one if it wasn't a brand new unsaved page
+        if (selectedTag !== "new-custom-page") {
+           const { deleteDoc } = require("firebase/firestore");
+           await deleteDoc(doc(db, "users", STORE_OWNER_UID, "collection_settings", selectedTag));
+        }
+        
+        setCollectionMetadata(prev => {
+          const next = { ...prev };
+          delete next[selectedTag];
+          next[newSlug] = updatedMeta;
+          return next;
+        });
+        setSelectedTag(newSlug);
+      } else {
+        await setDoc(doc(db, "users", STORE_OWNER_UID, "collection_settings", selectedTag), updatedMeta);
+        setCollectionMetadata(prev => ({ ...prev, [selectedTag]: updatedMeta }));
+      }
+      
       alert("Collection settings saved!");
     } catch (err) {
       console.error(err);
@@ -271,22 +345,30 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="min-h-screen flex bg-neutral-50 text-neutral-900 font-sans">
+    <div className="min-h-screen flex flex-col md:flex-row bg-neutral-50 text-neutral-900 font-sans">
+      {/* Mobile Top Nav */}
+      <div className="md:hidden flex items-center justify-between p-4 bg-white border-b sticky top-0 z-50 shadow-sm">
+        <h1 className="font-black text-lg tracking-tight">UnHolly Admin</h1>
+        <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="p-2 -mr-2 text-neutral-500 hover:text-black">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" /></svg>
+        </button>
+      </div>
+
       {/* Sidebar */}
-      <aside className="w-64 bg-white border-r h-screen sticky top-0 flex flex-col">
-        <div className="p-6 border-b">
+      <aside className={`${mobileMenuOpen ? 'flex absolute inset-0 z-40 bg-white flex-col mt-16 h-[calc(100vh-64px)]' : 'hidden'} md:flex w-full md:w-64 md:bg-white md:border-r md:h-screen md:sticky md:top-0 flex-col`}>
+        <div className="hidden md:block p-6 border-b">
           <h1 className="font-black text-xl tracking-tight">UnHolly Admin</h1>
           <p className="text-xs text-neutral-500 mt-1">{user.email}</p>
         </div>
         <nav className="flex-1 p-4 space-y-2">
           <button 
-            onClick={() => setActiveTab("inventory")}
+            onClick={() => { setActiveTab("inventory"); setMobileMenuOpen(false); }}
             className={`w-full text-left px-4 py-3 rounded-xl text-sm font-bold transition ${activeTab === "inventory" ? "bg-black text-white" : "text-neutral-600 hover:bg-neutral-100"}`}
           >
             📦 Inventory Master
           </button>
           <button 
-            onClick={() => setActiveTab("collections")}
+            onClick={() => { setActiveTab("collections"); setMobileMenuOpen(false); }}
             className={`w-full text-left px-4 py-3 rounded-xl text-sm font-bold transition ${activeTab === "collections" ? "bg-black text-white" : "text-neutral-600 hover:bg-neutral-100"}`}
           >
             🎨 Collection Pages
@@ -298,16 +380,40 @@ export default function AdminDashboard() {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-y-auto">
+      <main className={`flex-1 overflow-y-auto ${mobileMenuOpen ? 'hidden md:block' : 'block'}`}>
         
         {/* INVENTORY TAB */}
         {activeTab === "inventory" && (
           <div className="p-8">
-            <header className="mb-8 flex justify-between items-end">
+            <header className="mb-8 flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
               <div>
                 <h2 className="text-3xl font-black mb-2">Inventory Master</h2>
                 <p className="text-neutral-500 text-sm">Manage all your designs, including private portfolio items.</p>
               </div>
+              <button 
+                onClick={() => {
+                  const newId = crypto.randomUUID();
+                  setEditingProduct({
+                    id: newId,
+                    syncId: newId,
+                    docPath: `users/${STORE_OWNER_UID}/nail_sets/${newId}`,
+                    name: "New Item",
+                    description: "",
+                    basePrice: 0,
+                    priceOnAsk: false,
+                    type: "Sets",
+                    category: "Basics",
+                    isPromo: false,
+                    tags: [],
+                    isForSale: false,
+                    imagePath: "",
+                    additionalImages: []
+                  } as Product);
+                }}
+                className="bg-black text-white px-6 py-3 rounded-xl font-bold hover:bg-neutral-800 transition shadow text-sm w-full md:w-auto"
+              >
+                + Create New Item
+              </button>
             </header>
 
             {/* Bulk Action Bar */}
@@ -330,53 +436,42 @@ export default function AdminDashboard() {
             {loadingInventory ? (
               <div className="animate-pulse flex space-x-4"><div className="h-10 bg-neutral-200 rounded w-full"></div></div>
             ) : (
-              <div className="bg-white rounded-2xl border overflow-hidden shadow-sm">
-                <table className="w-full text-left text-sm">
-                  <thead className="bg-neutral-50 text-neutral-500 border-b">
-                    <tr>
-                      <th className="p-4 w-12"><input type="checkbox" onChange={toggleAll} checked={selectedIds.size === inventory.length && inventory.length > 0} className="w-4 h-4 accent-black" /></th>
-                      <th className="p-4 font-bold">Item</th>
-                      <th className="p-4 font-bold">Status</th>
-                      <th className="p-4 font-bold">Price</th>
-                      <th className="p-4 font-bold">Tags (Pins)</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y">
-                    {inventory.map(item => {
-                      // @ts-ignore - isForSale exists on our DB object but might be missing from Product interface in page.tsx
-                      const isPublic = item.isForSale;
-                      return (
-                        <tr key={item.id} className={`hover:bg-neutral-50 transition ${selectedIds.has(item.id) ? 'bg-pink-50' : ''}`}>
-                          <td className="p-4"><input type="checkbox" checked={selectedIds.has(item.id)} onChange={() => toggleSelection(item.id)} className="w-4 h-4 accent-black" /></td>
-                          <td className="p-4 flex flex-col gap-1">
-                            <div className="flex items-center gap-3">
-                              <div className="w-12 h-12 bg-neutral-100 rounded-lg overflow-hidden relative border shrink-0">
-                                {item.imagePath && <Image src={item.imagePath} alt="" fill className="object-cover" />}
-                                {!item.imagePath && (
-                                  <div className="absolute inset-0 flex items-center justify-center text-[8px] text-center text-neutral-400 font-bold p-1 leading-tight">
-                                    No Image
-                                  </div>
-                                )}
-                              </div>
-                              <span className="font-bold">{item.name}</span>
-                            </div>
-                            <span className="text-[10px] text-neutral-400 font-mono">Found {item.additionalImages?.length || 0} extra pics in DB</span>
-                          </td>
-                          <td className="p-4">
-                            {isPublic ? <span className="bg-green-100 text-green-700 px-2 py-1 rounded text-xs font-bold">Live on Store</span> : <span className="bg-neutral-100 text-neutral-500 px-2 py-1 rounded text-xs font-bold">Hidden</span>}
-                          </td>
-                          <td className="p-4 font-medium">{item.priceOnAsk ? <span className="text-pink-600 text-xs font-bold">POA</span> : `€${item.basePrice.toFixed(2)}`}</td>
-                          <td className="p-4">
-                            <div className="flex flex-wrap gap-1">
-                              {item.tags?.map(t => <span key={t} className="bg-neutral-100 border text-neutral-600 text-[10px] px-2 py-0.5 rounded-full">{t}</span>)}
-                              {(!item.tags || item.tags.length === 0) && <span className="text-neutral-400 italic text-xs">No tags</span>}
-                            </div>
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {inventory.map(item => {
+                  // @ts-ignore
+                  const isPublic = item.isForSale;
+                  return (
+                    <div key={item.id} className={`bg-white rounded-2xl border p-4 shadow-sm flex flex-col gap-3 transition ${selectedIds.has(item.id) ? 'ring-2 ring-pink-500 border-pink-500' : 'hover:border-neutral-300'}`}>
+                      <div className="flex justify-between items-start">
+                        <input type="checkbox" checked={selectedIds.has(item.id)} onChange={() => toggleSelection(item.id)} className="w-5 h-5 accent-pink-500" />
+                        {isPublic ? <span className="bg-green-100 text-green-700 px-2 py-1 rounded text-xs font-bold">Live</span> : <span className="bg-neutral-100 text-neutral-500 px-2 py-1 rounded text-xs font-bold">Hidden</span>}
+                      </div>
+                      <div className="flex items-center gap-4 mt-2">
+                        <div className="w-16 h-16 bg-neutral-100 rounded-xl overflow-hidden relative border shrink-0">
+                          {item.imagePath ? (
+                            <Image src={item.imagePath} alt="" fill className="object-cover" />
+                          ) : (
+                            <div className="absolute inset-0 flex items-center justify-center text-[10px] text-center text-neutral-400 font-bold p-1 leading-tight">No Image</div>
+                          )}
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="font-bold text-base leading-tight text-neutral-900">{item.name}</span>
+                          <span className="font-bold text-pink-600 text-sm mt-1">{item.priceOnAsk ? 'POA' : `€${item.basePrice.toFixed(2)}`}</span>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        {item.tags?.map((t: string) => <span key={t} className="bg-neutral-100 border text-neutral-600 text-[10px] px-2 py-0.5 rounded-full">{t}</span>)}
+                        {(!item.tags || item.tags.length === 0) && <span className="text-neutral-400 italic text-xs">No tags</span>}
+                      </div>
+                      <button 
+                        onClick={() => setEditingProduct(item)}
+                        className="mt-auto pt-3 border-t w-full text-center text-sm font-bold text-black hover:text-pink-600 transition"
+                      >
+                        Edit Details
+                      </button>
+                    </div>
+                  )
+                })}
               </div>
             )}
           </div>
@@ -390,29 +485,43 @@ export default function AdminDashboard() {
               <p className="text-neutral-500 text-sm">Design custom landing pages for your tagged collections (e.g. Halloween).</p>
             </header>
 
-            <div className="flex gap-8 items-start">
-              <div className="w-1/3 bg-white border rounded-2xl p-4 shadow-sm">
-                <h3 className="font-bold mb-4 px-2 text-neutral-500 text-xs uppercase tracking-wider">Your Tags</h3>
-                <div className="space-y-1">
-                  {uniqueTags.map(tag => (
-                    <button 
-                      key={tag} 
-                      onClick={() => setSelectedTag(tag)}
-                      className={`w-full text-left px-4 py-3 rounded-xl text-sm transition font-bold flex justify-between items-center ${selectedTag === tag ? 'bg-pink-50 text-pink-600 border border-pink-200' : 'hover:bg-neutral-50 border border-transparent'}`}
-                    >
-                      {tag}
-                      {collectionMetadata[tag]?.backgroundImageUrl && <span className="text-[10px] bg-pink-100 text-pink-500 px-2 py-0.5 rounded-full">Designed</span>}
-                    </button>
-                  ))}
-                  {uniqueTags.length === 0 && <p className="text-sm text-neutral-400 italic px-2">No tags found in inventory yet.</p>}
+            <div className="flex flex-col lg:flex-row gap-8 items-start">
+              <div className="w-full lg:w-1/3 bg-white border rounded-2xl p-4 shadow-sm">
+                <h3 className="font-bold mb-4 px-2 text-neutral-500 text-xs uppercase tracking-wider">Your Pages</h3>
+                <div className="space-y-1 mb-4 max-h-[40vh] lg:max-h-none overflow-y-auto">
+                  {uniqueTags.map(tag => {
+                    const displayName = tag.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+                    return (
+                      <button 
+                        key={tag} 
+                        onClick={() => setSelectedTag(tag)}
+                        className={`w-full text-left px-4 py-3 rounded-xl text-sm transition font-bold flex justify-between items-center ${selectedTag === tag ? 'bg-pink-50 text-pink-600 border border-pink-200' : 'hover:bg-neutral-50 border border-transparent'}`}
+                      >
+                        {displayName}
+                        {collectionMetadata[tag]?.backgroundImageUrl && <span className="text-[10px] bg-pink-100 text-pink-500 px-2 py-0.5 rounded-full">Designed</span>}
+                      </button>
+                    );
+                  })}
                 </div>
+                <button
+                  onClick={() => {
+                    setSelectedTag("new-custom-page");
+                    if (!collectionMetadata["new-custom-page"]) {
+                      setCollectionMetadata(p => ({...p, "new-custom-page": { tag: "new-custom-page", title: "New Page", description: "", backgroundImageUrl: "" }}));
+                    }
+                  }}
+                  className="w-full bg-black text-white px-4 py-3 rounded-xl text-sm font-bold hover:bg-neutral-800 transition shadow"
+                >
+                  + Create Custom Page
+                </button>
               </div>
 
-              <div className="flex-1 bg-white border rounded-2xl shadow-sm overflow-hidden">
+              <div className="w-full lg:flex-1 bg-white border rounded-2xl shadow-sm overflow-hidden">
                 {!selectedTag ? (
                   <div className="p-12 text-center text-neutral-400">
-                    <span className="text-4xl mb-4 block">👈</span>
-                    <p>Select a tag from the left to design its landing page.</p>
+                    <span className="text-4xl mb-4 hidden lg:block">👈</span>
+                    <span className="text-4xl mb-4 lg:hidden">👆</span>
+                    <p>Select a page from the list to design its landing page.</p>
                   </div>
                 ) : (
                   <form onSubmit={saveCollectionMeta} className="flex flex-col h-full">
@@ -421,12 +530,47 @@ export default function AdminDashboard() {
                         <h3 className="font-black text-xl">Design /{selectedTag}</h3>
                         <p className="text-xs text-neutral-500 mt-1">unhollynails.com/collections/{selectedTag.toLowerCase().replace(/\s+/g, '-')}</p>
                       </div>
-                      <button type="submit" disabled={savingCollection} className="bg-black text-white px-6 py-2 rounded-lg font-bold hover:bg-neutral-800 disabled:opacity-50">
-                        {savingCollection ? "Saving..." : "Save Page Design"}
-                      </button>
+                      <div className="flex items-center gap-3">
+                        {!["all", "special-offers", "sets", "keychains", "earrings", "accessories", "basics", "new-custom-page"].includes(selectedTag) && (
+                          <button 
+                            type="button" 
+                            onClick={async () => {
+                              if (window.confirm("Are you sure you want to delete this custom page?")) {
+                                const { deleteDoc, doc } = require("firebase/firestore");
+                                await deleteDoc(doc(db, "users", STORE_OWNER_UID, "collection_settings", selectedTag));
+                                setCollectionMetadata(prev => {
+                                  const next = { ...prev };
+                                  delete next[selectedTag];
+                                  return next;
+                                });
+                                setSelectedTag(null);
+                              }
+                            }}
+                            className="bg-red-50 text-red-600 px-4 py-2 rounded-lg font-bold hover:bg-red-100 transition text-sm"
+                          >
+                            Delete
+                          </button>
+                        )}
+                        <button type="submit" disabled={savingCollection} className="bg-black text-white px-6 py-2 rounded-lg font-bold hover:bg-neutral-800 disabled:opacity-50 text-sm">
+                          {savingCollection ? "Saving..." : "Save Page"}
+                        </button>
+                      </div>
                     </div>
 
-                    <div className="p-6 space-y-6">
+                    <div className="p-6 space-y-6 overflow-y-auto max-h-[70vh]">
+                      {!["all", "special-offers", "sets", "keychains", "earrings", "accessories", "basics"].includes(selectedTag) && (
+                        <div>
+                          <label className="block text-xs font-bold text-neutral-500 uppercase mb-2">Page URL Slug</label>
+                          <input 
+                            type="text" 
+                            value={collectionMetadata[selectedTag]?.tag || selectedTag} 
+                            onChange={e => setCollectionMetadata(p => ({...p, [selectedTag]: {...(p[selectedTag] || {}), tag: e.target.value.toLowerCase().replace(/\s+/g, '-')}}))}
+                            className="w-full border rounded-xl px-4 py-3 font-medium text-sm bg-neutral-50"
+                            placeholder="e.g. winter-collection"
+                          />
+                          <p className="text-xs text-neutral-400 mt-1">Changing this will change the URL of the page.</p>
+                        </div>
+                      )}
                       <div>
                         <label className="block text-xs font-bold text-neutral-500 uppercase mb-2">Display Title</label>
                         <input 
@@ -447,7 +591,34 @@ export default function AdminDashboard() {
                         />
                       </div>
 
-                      <div className="grid grid-cols-3 gap-4">
+                      <div className="mb-6">
+                        <label className="block text-xs font-bold text-neutral-500 uppercase mb-2">Included Products</label>
+                        <div className="h-64 overflow-y-auto border rounded-xl p-2 bg-white flex flex-col gap-1 shadow-inner">
+                          {inventory.map(item => (
+                            <label key={item.id} className="flex items-center gap-3 p-2 hover:bg-neutral-50 rounded-lg cursor-pointer transition">
+                              <input 
+                                type="checkbox" 
+                                checked={collectionMetadata[selectedTag]?.includedProductIds?.includes(item.id) || false}
+                                onChange={(e) => {
+                                  const currentIds = collectionMetadata[selectedTag]?.includedProductIds || [];
+                                  const newIds = e.target.checked 
+                                    ? [...currentIds, item.id] 
+                                    : currentIds.filter(id => id !== item.id);
+                                  setCollectionMetadata(p => ({...p, [selectedTag]: {...(p[selectedTag] || {}), includedProductIds: newIds, tag: selectedTag}}));
+                                }}
+                                className="w-5 h-5 text-pink-500 rounded border-gray-300 focus:ring-pink-500"
+                              />
+                              <div className="flex items-center gap-3">
+                                <Image src={item.imagePath} alt="" width={40} height={40} className="w-10 h-10 rounded-md object-cover border" />
+                                <span className="text-sm font-bold text-neutral-800">{item.name}</span>
+                              </div>
+                            </label>
+                          ))}
+                        </div>
+                        <p className="text-xs text-neutral-400 mt-2">If no items are selected, this page will automatically pull products tagged with exactly "{selectedTag}". If you select specific items here, it will ONLY pull the selected items.</p>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
                         <div>
                           <label className="block text-xs font-bold text-neutral-500 uppercase mb-2">Title Text Color</label>
                           <div className="flex items-center gap-3">
@@ -458,18 +629,6 @@ export default function AdminDashboard() {
                               className="w-12 h-12 rounded cursor-pointer border-0 p-0"
                             />
                             <span className="text-sm font-mono">{collectionMetadata[selectedTag]?.headerColor || "#ffffff"}</span>
-                          </div>
-                        </div>
-                        <div>
-                          <label className="block text-xs font-bold text-neutral-500 uppercase mb-2">Header BG Color</label>
-                          <div className="flex items-center gap-3">
-                            <input 
-                              type="color" 
-                              value={collectionMetadata[selectedTag]?.headerBgColor || "#ffffff"}
-                              onChange={e => setCollectionMetadata(p => ({...p, [selectedTag]: {...(p[selectedTag] || {}), headerBgColor: e.target.value, tag: selectedTag}}))}
-                              className="w-12 h-12 rounded cursor-pointer border-0 p-0"
-                            />
-                            <span className="text-sm font-mono">{collectionMetadata[selectedTag]?.headerBgColor || "#ffffff"}</span>
                           </div>
                         </div>
                         <div>
@@ -550,6 +709,105 @@ export default function AdminDashboard() {
           </div>
         )}
       </main>
+
+      {/* PRODUCT EDITOR MODAL (Mobile-Friendly Slide-up / Full Screen) */}
+      {editingProduct && (
+        <div className="fixed inset-0 z-50 bg-white flex flex-col md:p-8 md:bg-neutral-900/50">
+          <div className="flex-1 bg-white md:rounded-3xl shadow-2xl flex flex-col md:max-w-2xl md:mx-auto md:w-full overflow-hidden">
+            <header className="p-4 border-b flex justify-between items-center sticky top-0 bg-white z-10">
+              <h3 className="font-black text-xl">Edit Details</h3>
+              <div className="flex gap-2 items-center">
+                <button type="button" onClick={async () => {
+                  if (window.confirm("Are you sure you want to permanently delete this item from your inventory?")) {
+                    setSavingProduct(true);
+                    try {
+                      await deleteDoc(doc(db, editingProduct.docPath));
+                      setInventory(prev => prev.filter(p => p.id !== editingProduct.id));
+                      setEditingProduct(null);
+                    } catch(err) {
+                      console.error(err);
+                      alert("Failed to delete product.");
+                    } finally {
+                      setSavingProduct(false);
+                    }
+                  }
+                }} className="px-4 py-2 font-bold text-red-500 hover:bg-red-50 rounded-lg transition text-sm">Delete</button>
+                <button type="button" onClick={() => setEditingProduct(null)} className="px-4 py-2 font-bold text-neutral-500 hover:text-black text-sm">Cancel</button>
+                <button type="button" onClick={saveProductDetails} disabled={savingProduct} className="bg-black text-white px-6 py-2 rounded-lg font-bold hover:bg-neutral-800 disabled:opacity-50 text-sm">
+                  {savingProduct ? "Saving..." : "Save"}
+                </button>
+              </div>
+            </header>
+            
+            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              <div className="flex gap-4 items-center">
+                <div className="flex flex-col gap-2 shrink-0">
+                  <div className="w-24 h-24 bg-neutral-100 rounded-xl overflow-hidden relative border shrink-0">
+                    {editingProduct.imagePath && <Image src={editingProduct.imagePath} alt="" fill className="object-cover" />}
+                  </div>
+                  <input type="file" ref={productImgRef} accept="image/*" className="text-[10px] w-24 overflow-hidden" />
+                </div>
+                <div className="flex-1">
+                  <label className="block text-xs font-bold text-neutral-500 uppercase mb-2">Display Name</label>
+                  <input type="text" value={editingProduct.name} onChange={e => setEditingProduct({...editingProduct, name: e.target.value})} className="w-full border rounded-xl px-4 py-3 font-bold text-lg bg-neutral-50" />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-neutral-500 uppercase mb-2">Description</label>
+                <textarea value={editingProduct.description || ""} onChange={e => setEditingProduct({...editingProduct, description: e.target.value})} rows={3} className="w-full border rounded-xl px-4 py-3 text-sm bg-neutral-50" />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-neutral-500 uppercase mb-2">Base Price (€)</label>
+                  <input type="number" step="0.01" value={editingProduct.basePrice} onChange={e => setEditingProduct({...editingProduct, basePrice: parseFloat(e.target.value) || 0})} className="w-full border rounded-xl px-4 py-3 font-mono text-sm bg-neutral-50" />
+                </div>
+                <div className="flex items-center mt-6">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input type="checkbox" checked={editingProduct.priceOnAsk} onChange={e => setEditingProduct({...editingProduct, priceOnAsk: e.target.checked})} className="w-5 h-5 accent-pink-500" />
+                    <span className="text-sm font-bold">Price On Ask (POA)</span>
+                  </label>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-neutral-500 uppercase mb-2">Category (Type)</label>
+                  <select value={editingProduct.type || "Sets"} onChange={e => setEditingProduct({...editingProduct, type: e.target.value})} className="w-full border rounded-xl px-4 py-3 text-sm bg-neutral-50 font-bold">
+                    <option value="Sets">Sets</option>
+                    <option value="Keychains">Keychains</option>
+                    <option value="Earrings">Earrings</option>
+                    <option value="Accessories">Accessories</option>
+                    <option value="Basics">Basics</option>
+                  </select>
+                </div>
+                <div className="flex items-center mt-6">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input type="checkbox" checked={editingProduct.isPromo} onChange={e => setEditingProduct({...editingProduct, isPromo: e.target.checked})} className="w-5 h-5 accent-pink-500" />
+                    <span className="text-sm font-bold">Special Offer</span>
+                  </label>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-neutral-500 uppercase mb-2">Tags (Comma Separated)</label>
+                <input 
+                  type="text" 
+                  value={(editingProduct.tags || []).join(", ")} 
+                  onChange={e => {
+                    const tags = e.target.value.split(',').map(s => s.trim()).filter(Boolean);
+                    setEditingProduct({...editingProduct, tags});
+                  }}
+                  className="w-full border rounded-xl px-4 py-3 font-mono text-sm bg-neutral-50" 
+                />
+              </div>
+
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

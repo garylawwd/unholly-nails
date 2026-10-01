@@ -12,26 +12,13 @@ import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
 const dancingScript = Dancing_Script({ subsets: ["latin"] });
 import { db, auth, storage } from "@/lib/firebase";
+import { useCart } from "@/context/CartContext";
+import { useAdmin } from "@/context/AdminContext";
+import { Product } from "@/lib/types";
 
-export interface Product {
-  id: string;
-  docPath: string; 
-  name: string;
-  basePrice: number;
-  priceOnAsk: boolean;
-  imagePath: string;
-  additionalImages: string[];
-  description?: string;
-  defaultShape?: string;
-  defaultLength?: string;
-  isPromo: boolean;
-  category: string;
-  tags: string[];
-  syncId: string;
-}
-
-const SHAPE_OPTIONS = ["Almond", "Square", "Coffin", "Stiletto", "Oval"];
-const LENGTH_OPTIONS = ["XS", "S", "M", "L", "XL"];
+const SHAPE_OPTIONS = ["Almond", "Stiletto", "Coffin", "Square", "Oval", "Round", "Other"];
+const SIZE_OPTIONS = ["XS", "S", "M", "L", "Other"];
+const LENGTH_OPTIONS = ["XS", "S", "M", "L", "XL", "Other"];
 
 export default function CollectionPage() {
   const params = useParams();
@@ -40,14 +27,22 @@ export default function CollectionPage() {
   const tag = rawTag ? decodeURIComponent(rawTag) : "";
 
   const [products, setProducts] = useState<Product[]>([]);
-  const [collectionInfo, setCollectionInfo] = useState<{ title: string; description: string; backgroundImageUrl: string; headerColor?: string; headerBgColor?: string; descriptionColor?: string; ombreStart?: string; ombreEnd?: string; bgScale?: number; inRibbon?: boolean; tag?: string; } | null>(null);
+  const [collectionInfo, setCollectionInfo] = useState<{ title: string; description: string; backgroundImageUrl: string; headerColor?: string; descriptionColor?: string; ombreStart?: string; ombreEnd?: string; bgScale?: number; inRibbon?: boolean; tag?: string; includedProductIds?: string[]; } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [activeFilters, setActiveFilters] = useState<string[]>([]);
+  const [sortOption, setSortOption] = useState<string>('newest'); // 'newest', 'oldest', 'az', 'za'
+  const [showFilterModal, setShowFilterModal] = useState(false);
 
   // Drawer state
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [selectedShape, setSelectedShape] = useState<string>("Almond");
   const [selectedSize, setSelectedSize] = useState<string>("M");
-  const [bagCount, setBagCount] = useState(0);
+  const [selectedLength, setSelectedLength] = useState<string>("Medium");
+  const [selectedQuantity, setSelectedQuantity] = useState<number>(1);
+  const { addToCart } = useCart();
+  const { editMode, setEditingProduct } = useAdmin();
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [clientProfile, setClientProfile] = useState<any>(null);
 
   // Admin inline editing state
   const [adminUser, setAdminUser] = useState<User | null>(null);
@@ -75,7 +70,7 @@ export default function CollectionPage() {
 
   const fetchCollectionData = async () => {
     try {
-      const vendorUid = process.env.NEXT_PUBLIC_VENDOR_UID || "0TMvGP1VIja7VzVM87MPQaacoY03";
+      const vendorUid = process.env.NEXT_PUBLIC_VENDOR_UID || "CMzpkonBxKeLboaVTUYwDWgiwNG3";
       
       // 1. Fetch Collection Info
       const settingsRef = doc(db, "users", vendorUid, "collection_settings", tag);
@@ -100,7 +95,6 @@ export default function CollectionPage() {
           description: fallbackDesc,
           backgroundImageUrl: "",
           headerColor: "#ffffff",
-          headerBgColor: "#ffffff",
           descriptionColor: "#e5e5e5",
           ombreStart: "#f472b6",
           ombreEnd: "#000000",
@@ -160,7 +154,9 @@ export default function CollectionPage() {
           isPromo: data.isPromo === true,
           category: data.category || 'Standard',
           tags: data.tags || [],
-          syncId
+          syncId,
+          type: data.type || 'Sets',
+          updatedAt: data.updatedAt || 0
         };
       });
 
@@ -168,7 +164,30 @@ export default function CollectionPage() {
       if (tag === "special-offers") {
         fetchedProducts = fetchedProducts.filter(p => p.isPromo);
       } else if (tag !== "all") {
-        fetchedProducts = fetchedProducts.filter(p => p.tags && p.tags.includes(tag));
+        const topLevelMap: Record<string, string> = {
+          "sets": "Sets",
+          "keychains": "Keychains",
+          "keyrings": "Keychains",
+          "earrings": "Earrings",
+          "accessories": "Accessories",
+          "basics": "Basics",
+          "sizing-kit": "Sizing Kit"
+        };
+        const mappedType = topLevelMap[tag.toLowerCase()];
+        if (mappedType) {
+          if (mappedType === "Basics") {
+            fetchedProducts = fetchedProducts.filter(p => p.type === "Basics" || p.type === "Sizing Kit" || (p.tags && p.tags.includes("basics")));
+          } else {
+            fetchedProducts = fetchedProducts.filter(p => p.type === mappedType);
+          }
+        } else {
+          const includedIds = collectionInfo?.includedProductIds;
+          if (includedIds && includedIds.length > 0) {
+            fetchedProducts = fetchedProducts.filter(p => includedIds.includes(p.id));
+          } else {
+            fetchedProducts = fetchedProducts.filter(p => p.tags && p.tags.includes(tag));
+          }
+        }
       }
 
       setProducts(fetchedProducts);
@@ -185,12 +204,17 @@ export default function CollectionPage() {
     } else {
       document.body.style.overflow = "";
     }
+    return () => {
+      document.body.style.overflow = "";
+    };
   }, [selectedProduct]);
 
   const openDrawer = (product: Product) => {
     setSelectedProduct(product);
-    setSelectedShape(product.defaultShape || "Almond");
-    setSelectedSize(product.defaultLength || "M");
+    setSelectedShape(clientProfile?.defaultShape || product.defaultShape || "Almond");
+    setSelectedSize(clientProfile ? "Profile Sizes" : "M");
+    setSelectedLength(clientProfile?.defaultLength || product.defaultLength || "M");
+    setSelectedQuantity(1);
   };
 
   const closeDrawer = () => {
@@ -198,14 +222,40 @@ export default function CollectionPage() {
   };
 
   const handleAddToBag = () => {
-    setBagCount((prev) => prev + 1);
-    closeDrawer();
+    if (selectedProduct) {
+      const name = selectedProduct.name.toLowerCase();
+      const isSizingKit = name.includes('sizing');
+      const isMiniSet = name.includes('mini') || name.includes('kids');
+      
+      const finalSize = isSizingKit ? 'N/A' : selectedSize;
+      const finalShape = isMiniSet ? 'N/A' : selectedShape;
+      const finalLength = isMiniSet ? 'N/A' : selectedLength;
+
+      addToCart(selectedProduct, finalShape, finalSize, finalLength, selectedQuantity);
+      closeDrawer();
+    }
   };
 
-  // Admin auth detection
+  // Admin auth detection + current user tracking
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (u) => {
-      setAdminUser(u);
+    const VALID_ADMINS = ["0TMvGP1VIja7VzVM87MPQaacoY03", "CMzpkonBxKeLboaVTUYwDWgiwNG3"];
+    const unsub = onAuthStateChanged(auth, async (u) => {
+      setCurrentUser(u);
+      if (u && VALID_ADMINS.includes(u.uid)) {
+        setAdminUser(u);
+      } else {
+        setAdminUser(null);
+      }
+      if (u && u.email) {
+        try {
+          const vendorUid = process.env.NEXT_PUBLIC_VENDOR_UID || "CMzpkonBxKeLboaVTUYwDWgiwNG3";
+          const q = query(collection(db, "users", vendorUid, "clients"), where("email", "==", u.email));
+          const snap = await getDocs(q);
+          if (!snap.empty) {
+            setClientProfile(snap.docs[0].data());
+          }
+        } catch (e) { console.error("Failed to fetch client profile", e); }
+      }
     });
     return () => unsub();
   }, []);
@@ -219,7 +269,7 @@ export default function CollectionPage() {
     if (!adminUser || !editData) return;
     setSavingEdit(true);
     try {
-      const vendorUid = process.env.NEXT_PUBLIC_VENDOR_UID || '0TMvGP1VIja7VzVM87MPQaacoY03';
+      const vendorUid = process.env.NEXT_PUBLIC_VENDOR_UID || "CMzpkonBxKeLboaVTUYwDWgiwNG3";
       let newImageUrl = editData.backgroundImageUrl;
 
       if (bgFileRef.current?.files && bgFileRef.current.files.length > 0) {
@@ -261,46 +311,15 @@ export default function CollectionPage() {
       </div>
 
       <div className="relative z-10 flex flex-col min-h-screen">
-        {adminUser && (
-          <div className="bg-neutral-900 text-white px-4 py-2 text-sm flex justify-between items-center z-[60] relative">
-            <div className="flex flex-wrap items-center gap-4">
-              <span className="font-semibold text-pink-400">Admin Logged In</span>
-              <span className="text-xs text-neutral-400">Collection Page Editor</span>
-              <Link href="/admin" className="bg-pink-500 hover:bg-pink-600 text-white px-3 py-1 text-xs rounded-md font-bold transition-colors ml-2 shadow-sm">
-                Go to Admin Dashboard →
-              </Link>
-            </div>
-          </div>
-        )}
 
-        <header 
-          className="sticky top-0 left-0 right-0 h-24 backdrop-blur-md z-40 border-b border-pink-100/50 flex items-center justify-between px-4 sm:px-6"
-          style={{ backgroundColor: collectionInfo?.headerBgColor ? `${collectionInfo.headerBgColor}cc` : 'rgba(255,255,255,0.8)' }}
-        >
-          <div className="flex-1">
-            <Link href="/" className="text-sm font-semibold text-neutral-600 hover:text-black flex items-center gap-2">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" /></svg>
-              Back to Store
-            </Link>
-          </div>
-          <div className="flex justify-center items-center h-full flex-1 py-2">
-            <Link href="/" className="flex justify-center items-center h-full">
-              <Image src="/logo_cropped.png" alt="UnHolly Nails" width={400} height={160} className="h-full w-auto object-contain" priority />
-            </Link>
-          </div>
-          <div className="flex-1 flex justify-end">
-            <button className="relative p-2" aria-label="Shopping Bag">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" /></svg>
-              {bagCount > 0 && <span className="absolute top-1 right-1 bg-black text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full">{bagCount}</span>}
-            </button>
-          </div>
-        </header>
 
-        <div className="pt-8 pb-6 sm:pt-16 sm:pb-12 text-center px-4 relative mt-4">
+
+
+        <div className="pt-16 pb-6 sm:pt-28 sm:pb-12 text-center px-4 relative mt-4">
           {adminUser && (
             <button 
               onClick={openInlineEditor}
-              className="absolute top-0 right-6 sm:top-4 sm:right-8 bg-black/70 text-white p-3 rounded-full hover:bg-black transition-all shadow-lg z-30 group"
+              className="absolute top-4 right-6 sm:top-12 sm:right-8 bg-black/70 text-white p-3 rounded-full hover:bg-black transition-all shadow-lg z-30 group"
               title="Edit Collection"
             >
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5 group-hover:scale-110 transition-transform"><path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" /></svg>
@@ -321,6 +340,75 @@ export default function CollectionPage() {
         </div>
 
         <main className="max-w-7xl mx-auto px-3 sm:px-6 mb-20 w-full flex-grow">
+          {/* Top Control Bar (Filter/Sort) */}
+          {/* Top Control Bar (Filter/Sort) */}
+          <div className="flex justify-end items-center mb-6">
+            <button 
+              onClick={() => setShowFilterModal(true)}
+              className="flex items-center gap-2 bg-white/10 hover:bg-white/20 border border-white/20 text-white px-4 py-2 rounded-full text-sm font-bold transition backdrop-blur-md"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75" /></svg>
+              Filter & Sort
+              {activeFilters.length > 0 && <span className="ml-1 bg-pink-500 text-white text-xs px-1.5 py-0.5 rounded-full">{activeFilters.length}</span>}
+            </button>
+          </div>
+
+          {showFilterModal && (
+            <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
+              <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowFilterModal(false)}></div>
+              <div className="bg-white rounded-3xl w-full max-w-md p-6 relative z-10 animate-slide-up">
+                <div className="flex justify-between items-center mb-6">
+                  <h3 className="text-xl font-black text-black">Filter & Sort</h3>
+                  <button onClick={() => setShowFilterModal(false)} className="p-2 text-neutral-400 hover:text-black">✕</button>
+                </div>
+                
+                <div className="mb-8">
+                  <h4 className="text-sm font-bold text-neutral-900 uppercase tracking-wider mb-3">Sort By</h4>
+                  <select 
+                    value={sortOption} 
+                    onChange={e => setSortOption(e.target.value)}
+                    className="w-full bg-neutral-50 border border-neutral-200 text-black px-4 py-3 rounded-xl font-bold appearance-none cursor-pointer"
+                  >
+                    <option value="newest">Newest to Oldest</option>
+                    <option value="oldest">Oldest to Newest</option>
+                    <option value="az">A to Z (Ascending)</option>
+                    <option value="za">Z to A (Descending)</option>
+                  </select>
+                </div>
+
+                <div className="mb-6">
+                  <h4 className="text-sm font-bold text-neutral-900 uppercase tracking-wider mb-3">Filter By Style</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {Array.from(new Set(products.flatMap(p => p.tags || []))).sort().map(chip => (
+                      <button
+                        key={chip}
+                        onClick={() => setActiveFilters(prev => prev.includes(chip) ? prev.filter(c => c !== chip) : [...prev, chip])}
+                        className={`px-4 py-2 rounded-xl text-sm font-bold transition-colors ${activeFilters.includes(chip) ? 'bg-black text-white' : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'}`}
+                      >
+                        {chip}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex gap-3 pt-4 border-t border-neutral-100">
+                  <button 
+                    onClick={() => { setActiveFilters([]); setSortOption('newest'); }}
+                    className="px-6 py-3 rounded-xl font-bold text-neutral-500 hover:bg-neutral-100 transition flex-1"
+                  >
+                    Clear All
+                  </button>
+                  <button 
+                    onClick={() => setShowFilterModal(false)}
+                    className="px-6 py-3 bg-[#FF5C9D] text-white rounded-xl font-bold hover:bg-pink-600 transition flex-1 shadow-lg shadow-pink-500/30"
+                  >
+                    Apply Settings
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {loading ? (
             <div className="flex justify-center items-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div></div>
           ) : products.length === 0 ? (
@@ -331,22 +419,39 @@ export default function CollectionPage() {
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6">
-              {products.map((product) => (
-                <div key={product.id} className="bg-white/95 backdrop-blur-md rounded-2xl p-3 shadow-2xl border border-white/20 flex flex-col group relative transform transition-transform hover:-translate-y-1">
+              {(() => {
+                let displayed = products.filter(p => activeFilters.length === 0 || activeFilters.some(f => p.tags?.includes(f)));
+                if (sortOption === 'az') displayed.sort((a, b) => a.name.localeCompare(b.name));
+                else if (sortOption === 'za') displayed.sort((a, b) => b.name.localeCompare(a.name));
+                else if (sortOption === 'oldest') displayed.sort((a, b) => (a.updatedAt && b.updatedAt) ? a.updatedAt - b.updatedAt : a.id.localeCompare(b.id)); 
+                else displayed.sort((a, b) => (a.updatedAt && b.updatedAt) ? b.updatedAt - a.updatedAt : b.id.localeCompare(a.id)); // newest default
+                return displayed;
+              })().map((product) => (
+                <div key={product.id} className={`bg-white/95 backdrop-blur-md rounded-2xl p-3 shadow-2xl border ${editMode ? 'border-pink-500 ring-2 ring-pink-500/20' : 'border-white/20'} flex flex-col group relative transform transition-transform hover:-translate-y-1`}>
+                  {editMode && (
+                    <button onClick={() => setEditingProduct(product)} className="absolute top-4 right-4 bg-black text-white px-3 py-1.5 rounded-full text-[10px] font-bold z-20 hover:bg-neutral-800 shadow-md">✏️ EDIT</button>
+                  )}
                   {product.isPromo && (
                     <div className="absolute top-4 left-4 bg-pink-500 text-white text-[9px] font-bold px-2.5 py-1 rounded-full z-10 shadow-sm uppercase tracking-wider">PROMO</div>
                   )}
-                  <div className="relative aspect-square overflow-hidden rounded-xl bg-pink-50 cursor-pointer" onClick={() => openDrawer(product)}>
+                  <div className="relative aspect-square overflow-hidden rounded-xl bg-pink-50 cursor-pointer" onClick={() => !editMode && openDrawer(product)}>
                     <Image src={product.imagePath} alt={product.name} fill className="object-cover transition-transform duration-500 ease-out group-hover:scale-105" sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw" />
+                    {editMode && product.tags && product.tags.length > 0 && (
+                      <div className="absolute bottom-2 left-2 right-2 flex flex-wrap gap-1 z-10">
+                        {product.tags.map(t => <span key={t} className="bg-black/70 backdrop-blur-md text-white text-[9px] px-2 py-0.5 rounded font-bold uppercase tracking-wider">{t}</span>)}
+                      </div>
+                    )}
                   </div>
                   <div className="mt-3 flex flex-col flex-grow">
                     <h2 className="text-sm sm:text-base font-bold text-[#1A1A1A] truncate">{product.name}</h2>
                     <p className={`font-medium text-sm mt-0.5 mb-3 ${product.priceOnAsk ? 'text-pink-600 font-bold' : 'text-neutral-600'}`}>
                       {product.priceOnAsk ? "Price on Ask" : `€${product.basePrice.toFixed(2)}`}
                     </p>
-                    <div className="mt-auto">
-                      <button onClick={() => openDrawer(product)} className="w-full bg-black text-white px-4 py-2.5 rounded-full text-sm font-semibold transition-colors hover:bg-neutral-800">Select Options</button>
-                    </div>
+                    {!editMode && (
+                      <div className="mt-auto">
+                        <button onClick={() => openDrawer(product)} className="w-full bg-black text-white px-4 py-2.5 rounded-full text-sm font-semibold transition-colors hover:bg-neutral-800">Select Options</button>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
@@ -366,11 +471,11 @@ export default function CollectionPage() {
             <div className="overflow-y-auto w-full hide-scrollbar">
               <div className="relative group">
                 <div ref={scrollContainerRef} className="flex overflow-x-auto snap-x snap-mandatory hide-scrollbar">
-                  <div className="relative aspect-square w-full shrink-0 snap-center bg-pink-50">
+                  <div className="relative aspect-[4/3] w-full shrink-0 snap-center bg-pink-50">
                     <Image src={selectedProduct.imagePath} alt={selectedProduct.name} fill className="object-cover" sizes="(max-width: 640px) 100vw, 480px" />
                   </div>
                   {selectedProduct.additionalImages?.map((url, idx) => (
-                    <div key={idx} className="relative aspect-square w-full shrink-0 snap-center bg-pink-50 border-l border-white">
+                    <div key={idx} className="relative aspect-[4/3] w-full shrink-0 snap-center bg-pink-50 border-l border-white">
                       <Image src={url} alt={`${selectedProduct.name} ${idx}`} fill className="object-cover" sizes="(max-width: 640px) 100vw, 480px" />
                     </div>
                   ))}
@@ -403,50 +508,87 @@ export default function CollectionPage() {
                 </div>
                 <h2 className="text-2xl font-bold text-[#1A1A1A] mb-1">{selectedProduct.name}</h2>
                 
-                <p className={`text-lg font-medium mb-6 ${selectedProduct.priceOnAsk ? 'text-pink-600 font-bold' : 'text-neutral-600'}`}>
+                <p className={`text-lg font-medium mb-4 ${selectedProduct.priceOnAsk ? 'text-pink-600 font-bold' : 'text-neutral-600'}`}>
                   {selectedProduct.priceOnAsk ? "Price on Ask" : `€${selectedProduct.basePrice.toFixed(2)}`}
                 </p>
-                
-                <div className="mb-6">
-                  <div className="flex justify-between items-end mb-3">
-                    <h3 className="text-sm font-bold text-neutral-900 uppercase tracking-wider">Shape</h3>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    {SHAPE_OPTIONS.map(shape => (
-                      <label key={shape} className={`cursor-pointer text-center px-4 py-3 rounded-xl text-sm font-semibold border transition-all ${selectedShape === shape ? 'bg-black text-white border-black' : 'bg-white text-neutral-700 border-neutral-200 hover:border-black'}`}>
-                        <input type="radio" className="hidden" name="shape" value={shape} checked={selectedShape === shape} onChange={(e) => setSelectedShape(e.target.value)} />
-                        {shape}
-                      </label>
-                    ))}
-                  </div>
-                </div>
-                <div className="mb-6">
-                  <div className="flex justify-between items-end mb-3">
-                    <h3 className="text-sm font-bold text-neutral-900 uppercase tracking-wider">Size / Length</h3>
-                    <button className="text-xs text-neutral-500 underline underline-offset-2">Sizing Guide</button>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {LENGTH_OPTIONS.map(size => (
-                      <label key={size} className={`cursor-pointer flex-1 min-w-[3rem] py-3 flex items-center justify-center rounded-xl text-sm font-semibold border transition-all ${selectedSize === size ? 'bg-black text-white border-black' : 'bg-white text-neutral-700 border-neutral-200 hover:border-black'}`}>
-                        <input type="radio" className="hidden" name="size" value={size} checked={selectedSize === size} onChange={(e) => setSelectedSize(e.target.value)} />
-                        {size}
-                      </label>
-                    ))}
-                  </div>
-                </div>
                 {selectedProduct.description && (
-                  <div className="mt-2 text-neutral-600 text-sm leading-relaxed whitespace-pre-wrap">
+                  <p className="text-neutral-500 text-sm leading-relaxed mb-5 whitespace-pre-wrap">
                     {selectedProduct.description}
+                  </p>
+                )}
+                
+                {!selectedProduct.name.toLowerCase().includes('mini') && !selectedProduct.name.toLowerCase().includes('kids') && (
+                  <div className="mb-4">
+                    <div className="flex justify-between items-end mb-2">
+                      <h3 className="text-sm font-bold text-neutral-900 uppercase tracking-wider">Shape</h3>
+                    </div>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {SHAPE_OPTIONS.map(shape => (
+                        <label key={shape} className={`cursor-pointer text-center px-3 py-2.5 rounded-xl text-sm font-semibold border transition-all ${selectedShape === shape ? 'bg-black text-white border-black' : 'bg-white text-neutral-700 border-neutral-200 hover:border-black'}`}>
+                          <input type="radio" className="hidden" name="shape" value={shape} checked={selectedShape === shape} onChange={(e) => setSelectedShape(e.target.value)} />
+                          {shape}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
+                {!selectedProduct.name.toLowerCase().includes('sizing') && (
+                  <div className="mb-4">
+                    <div className="flex justify-between items-end mb-2">
+                      <h3 className="text-sm font-bold text-neutral-900 uppercase tracking-wider">Size</h3>
+                      <Link href="/guides" className="text-xs text-neutral-500 underline underline-offset-2 hover:text-black">Sizing Guide</Link>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5 mb-1">
+                      {currentUser && (
+                        <label className={`cursor-pointer w-full py-2.5 flex items-center justify-center rounded-xl text-sm font-semibold border transition-all ${selectedSize === 'Profile Sizes' ? 'bg-black text-white border-black' : 'bg-pink-50 text-pink-700 border-pink-200 hover:border-pink-300'}`}>
+                          <input type="radio" className="hidden" name="size" value="Profile Sizes" checked={selectedSize === 'Profile Sizes'} onChange={(e) => setSelectedSize(e.target.value)} />
+                          ✨ Use My Saved Sizes ✨
+                        </label>
+                      )}
+                      {SIZE_OPTIONS.map(size => (
+                        <label key={size} className={`cursor-pointer flex-1 min-w-[3rem] py-2.5 flex items-center justify-center rounded-xl text-sm font-semibold border transition-all ${selectedSize === size ? 'bg-black text-white border-black' : 'bg-white text-neutral-700 border-neutral-200 hover:border-black'}`}>
+                          <input type="radio" className="hidden" name="size" value={size} checked={selectedSize === size} onChange={(e) => setSelectedSize(e.target.value)} />
+                          {size}
+                        </label>
+                      ))}
+                    </div>
+                    {!currentUser && (
+                      <p className="text-[10px] text-neutral-500 text-center italic mt-1">
+                        💡 Tip: Setting up a profile lets you save your exact custom sizes for faster checkouts!
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {!selectedProduct.name.toLowerCase().includes('mini') && !selectedProduct.name.toLowerCase().includes('kids') && (
+                  <div className="mb-4">
+                    <div className="flex justify-between items-end mb-2">
+                      <h3 className="text-sm font-bold text-neutral-900 uppercase tracking-wider">Length</h3>
+                    </div>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {LENGTH_OPTIONS.map(length => (
+                        <label key={length} className={`cursor-pointer text-center px-3 py-2.5 rounded-xl text-sm font-semibold border transition-all ${selectedLength === length ? 'bg-black text-white border-black' : 'bg-white text-neutral-700 border-neutral-200 hover:border-black'}`}>
+                          <input type="radio" className="hidden" name="length" value={length} checked={selectedLength === length} onChange={(e) => setSelectedLength(e.target.value)} />
+                          {length}
+                        </label>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
             </div>
-            <div className="p-4 bg-white border-t border-neutral-100 flex-shrink-0">
+            <div className="p-4 bg-white border-t border-neutral-100 flex-shrink-0 flex items-center gap-4">
+              <div className="flex items-center border border-neutral-200 rounded-xl px-2 h-[56px]">
+                <button onClick={() => setSelectedQuantity(Math.max(1, selectedQuantity - 1))} className="p-2 text-neutral-500 hover:text-black w-8 h-full flex items-center justify-center font-bold text-lg">-</button>
+                <span className="px-2 font-bold text-sm min-w-[2rem] text-center">{selectedQuantity}</span>
+                <button onClick={() => setSelectedQuantity(selectedQuantity + 1)} className="p-2 text-neutral-500 hover:text-black w-8 h-full flex items-center justify-center font-bold text-lg">+</button>
+              </div>
               <button 
-                onClick={selectedProduct.priceOnAsk ? () => alert("Redirect to contact form...") : handleAddToBag} 
-                className="w-full bg-black text-white font-bold text-base py-4 rounded-xl hover:bg-neutral-800 transition-colors shadow-lg shadow-black/10 active:scale-[0.98]"
+                onClick={handleAddToBag} 
+                className="flex-grow bg-black text-white font-bold text-base py-4 rounded-xl hover:bg-neutral-800 transition-colors shadow-lg shadow-black/10 active:scale-[0.98] h-[56px]"
               >
-                {selectedProduct.priceOnAsk ? "Inquire for Quote" : `Add to Bag — €${selectedProduct.basePrice.toFixed(2)}`}
+                {selectedProduct.priceOnAsk ? "Add to Request — POA" : `Add to Bag — €${(selectedProduct.basePrice * selectedQuantity).toFixed(2)}`}
               </button>
             </div>
           </div>
@@ -487,19 +629,12 @@ export default function CollectionPage() {
               </div>
 
               {/* Color Pickers */}
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[10px] font-bold text-neutral-500 uppercase mb-1">Title Color</label>
                   <div className="flex flex-col items-center gap-1">
                     <input type="color" value={editData.headerColor || '#ffffff'} onChange={e => setEditData((p: any) => ({ ...p, headerColor: e.target.value }))} className="w-10 h-10 rounded cursor-pointer border-0 p-0" />
                     <span className="text-[10px] font-mono text-neutral-400">{editData.headerColor || '#ffffff'}</span>
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-neutral-500 uppercase mb-1">Header BG</label>
-                  <div className="flex flex-col items-center gap-1">
-                    <input type="color" value={editData.headerBgColor || '#ffffff'} onChange={e => setEditData((p: any) => ({ ...p, headerBgColor: e.target.value }))} className="w-10 h-10 rounded cursor-pointer border-0 p-0" />
-                    <span className="text-[10px] font-mono text-neutral-400">{editData.headerBgColor || '#ffffff'}</span>
                   </div>
                 </div>
                 <div>
@@ -544,7 +679,6 @@ export default function CollectionPage() {
                   </div>
                 </div>
               </div>
-
               {/* Ribbon Toggle */}
               <label className="flex items-center gap-3 cursor-pointer p-4 border rounded-xl hover:bg-neutral-50 transition">
                 <input 

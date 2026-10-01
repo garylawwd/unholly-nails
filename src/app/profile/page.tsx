@@ -1,0 +1,716 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { auth, db } from '@/lib/firebase';
+import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut } from 'firebase/auth';
+import { collection, query, where, getDocs, doc, setDoc } from 'firebase/firestore';
+import Link from 'next/link';
+import Image from 'next/image';
+import { Dancing_Script } from 'next/font/google';
+
+const dancingScript = Dancing_Script({ subsets: ["latin"] });
+
+export default function ProfilePage() {
+  const [user, setUser] = useState<any>(null);
+  const [clientProfile, setClientProfile] = useState<any>(null);
+  const [sizes, setSizes] = useState<any>({});
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('sizing');
+  const [isEditingDetails, setIsEditingDetails] = useState(false);
+  const [editForm, setEditForm] = useState<any>({});
+  const [orders, setOrders] = useState<any[]>([]);
+  
+  // Setup Flow States
+  const [needsSetup, setNeedsSetup] = useState(false);
+  const [setupInsta, setSetupInsta] = useState('');
+  const [setupError, setSetupError] = useState('');
+  const [isSettingUp, setIsSettingUp] = useState(false);
+  
+  const vendorUid = process.env.NEXT_PUBLIC_VENDOR_UID || "CMzpkonBxKeLboaVTUYwDWgiwNG3";
+
+  const FINGER_MAP: any = {
+    'Left-Pinky': 0,
+    'Left-Ring': 1,
+    'Left-Middle': 2,
+    'Left-Index': 3,
+    'Left-Thumb': 4,
+    'Right-Thumb': 5,
+    'Right-Index': 6,
+    'Right-Middle': 7,
+    'Right-Ring': 8,
+    'Right-Pinky': 9
+  };
+
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, async (u) => {
+      setUser(u);
+      if (u) {
+        try {
+          // GLOBAL HEAL: Fix all clients that might have been corrupted with a string 'id'
+          const allClientsQ = query(collection(db, "users", vendorUid, "clients"));
+          const allSnap = await getDocs(allClientsQ);
+          allSnap.forEach(async (docSnap) => {
+            const data = docSnap.data();
+            let needsHeal = false;
+            const healData = { ...data };
+            if (typeof healData.id === 'string') {
+              healData.id = 0; // Android requires Int
+              needsHeal = true;
+            }
+            if (typeof healData.birthday === 'string') {
+              healData.birthday = null; // Android requires Long
+              needsHeal = true;
+            }
+            if (needsHeal) {
+              await setDoc(docSnap.ref, healData);
+            }
+          });
+
+          const q = query(collection(db, "users", vendorUid, "clients"), where("email", "==", u.email));
+          const snapshot = await getDocs(q);
+          if (!snapshot.empty) {
+            const clientData: any = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() };
+            // Ensure state has id:0 so we don't re-corrupt it on save
+            clientData.id = 0; 
+            
+            setClientProfile(clientData);
+            setEditForm(clientData);
+            
+            // Fetch nail sizes
+            const sizeQ = query(collection(db, "users", vendorUid, "nail_sizes"), where("clientSyncId", "==", clientData.syncId));
+            const sizeSnap = await getDocs(sizeQ);
+            const loadedSizes: any = {};
+            sizeSnap.forEach(docSnap => {
+              const data = docSnap.data();
+              // EMERGENCY RECOVERY for bad sizes
+              if (data.fingerName !== undefined || typeof data.size === 'string' || typeof data.fingerIndex !== 'number') {
+                import('firebase/firestore').then(mod => {
+                  mod.deleteDoc(mod.doc(db, "users", vendorUid, "nail_sizes", data.syncId));
+                });
+                return; // Skip loading this corrupted size
+              }
+
+              const key = Object.keys(FINGER_MAP).find(k => FINGER_MAP[k] === data.fingerIndex);
+              if (key) {
+                loadedSizes[key] = { syncId: data.syncId, sizeMm: data.sizeMm };
+              }
+            });
+            setSizes(loadedSizes);
+
+            // Fetch orders
+            const ordersQ = query(collection(db, "users", vendorUid, "orders"), where("clientSyncId", "==", clientData.syncId));
+            const ordersSnap = await getDocs(ordersQ);
+            const loadedOrders: any[] = [];
+            ordersSnap.forEach(docSnap => {
+               loadedOrders.push(docSnap.data());
+            });
+            loadedOrders.sort((a, b) => (b.orderDate || b.updatedAt || 0) - (a.orderDate || a.updatedAt || 0));
+            setOrders(loadedOrders);
+
+          } else {
+            // Unrecognized user. Ask for Instagram link to claim profile or create a new one.
+            setNeedsSetup(true);
+          }
+        } catch (e) {
+          console.error("Error fetching profile:", e);
+        }
+      }
+      setLoading(false);
+    });
+    return () => unsub();
+  }, [vendorUid]);
+  const handleSetupProfile = async (isSkip = false) => {
+    if (!user) return;
+    setSetupError('');
+    
+    setIsSettingUp(true);
+
+    try {
+      if (isSkip) {
+        // Brand new profile without Instagram
+        const syncId = crypto.randomUUID();
+        const newClient = {
+          syncId,
+          id: 0,
+          name: user.displayName || '',
+          email: user.email || '',
+          instagram: '',
+          phone: '',
+          address: '',
+          birthday: null,
+          defaultShape: 'Almond',
+          defaultLength: 'M',
+          additionalComments: '',
+          designNotes: '',
+          adminUid: vendorUid,
+          loyaltyStamps: 0,
+          loyaltyRewardsAvailable: 0,
+          updatedAt: Date.now()
+        };
+        await setDoc(doc(db, "users", vendorUid, "clients", syncId), newClient);
+        setClientProfile({ ...newClient, id: syncId });
+        setEditForm(newClient);
+        setNeedsSetup(false);
+        setIsSettingUp(false);
+        return;
+      }
+
+      if (!setupInsta.trim()) {
+        setSetupError("Please enter your Instagram handle");
+        setIsSettingUp(false);
+        return;
+      }
+      
+      // Clean handle
+      let cleaned = setupInsta.trim().toLowerCase();
+      cleaned = cleaned.replace(/^@/, '');
+      cleaned = cleaned.replace(/^https?:\/\/(www\.)?instagram\.com\//, '');
+      cleaned = cleaned.split('/')[0].split('?')[0];
+
+      // 1. Check if profile with this instagram already exists
+      const q = query(collection(db, "users", vendorUid, "clients"), where("instagram", "==", cleaned));
+      const snapshot = await getDocs(q);
+      
+      if (!snapshot.empty) {
+        // Found profile
+        const existingDoc = snapshot.docs[0];
+        const existingData = existingDoc.data();
+        
+        if (existingData.email && existingData.email !== user.email) {
+           // ALREADY CLAIMED
+           setSetupError("This Instagram account is already securely linked to another profile. If this is an error, please contact support.");
+           
+           // Log alert for admin
+           await setDoc(doc(collection(db, "users", vendorUid, "admin_notifications")), {
+             type: "LINK_ATTEMPT_DENIED",
+             message: `User ${user.email} attempted to claim @${cleaned}, but it is already securely linked to ${existingData.email}.`,
+             timestamp: Date.now(),
+             read: false
+           });
+           setIsSettingUp(false);
+           return;
+        }
+        
+        // Unclaimed! Let's claim it.
+        const updateData = {
+           ...existingData,
+           email: user.email,
+           syncId: existingData.syncId || existingDoc.id,
+           name: user.displayName || existingData.name || '',
+           id: 0,
+           updatedAt: Date.now()
+        };
+        await setDoc(existingDoc.ref, updateData);
+        
+        // Reload page so all useEffect listeners for sizes/orders fire correctly with new syncId
+        window.location.reload();
+      } else {
+        // Brand new profile
+        const syncId = crypto.randomUUID();
+        const newClient = {
+          syncId,
+          id: 0,
+          name: user.displayName || '',
+          email: user.email || '',
+          instagram: cleaned,
+          phone: '',
+          address: '',
+          birthday: null,
+          defaultShape: 'Almond',
+          defaultLength: 'M',
+          additionalComments: '',
+          designNotes: '',
+          adminUid: vendorUid,
+          loyaltyStamps: 0,
+          loyaltyRewardsAvailable: 0,
+          updatedAt: Date.now()
+        };
+        await setDoc(doc(db, "users", vendorUid, "clients", syncId), newClient);
+        setClientProfile({ ...newClient, id: syncId });
+        setEditForm(newClient);
+        setNeedsSetup(false);
+      }
+    } catch (e: any) {
+       console.error("Setup error:", e);
+       setSetupError("Failed to link profile. Please try again.");
+    }
+    setIsSettingUp(false);
+  };
+
+  const handleSizeChange = (hand: string, fingerName: string, value: string) => {
+    setSizes((prev: any) => {
+      const current = prev[`${hand}-${fingerName}`] || {};
+      return { ...prev, [`${hand}-${fingerName}`]: { ...current, sizeMm: value } };
+    });
+  };
+
+  const handleSizeSave = async (hand: string, fingerName: string) => {
+    if (!clientProfile?.syncId) return;
+    const currentData = sizes[`${hand}-${fingerName}`] || {};
+    const val = currentData.sizeMm;
+    
+    if (val === '' || val === undefined || val === null) return; // Might want to delete in future, but for now just ignore
+    const finalSizeMm = parseFloat(val);
+    if (isNaN(finalSizeMm)) return;
+    
+    const sizeSyncId = currentData.syncId || crypto.randomUUID();
+    
+    // Normalize state to number
+    setSizes((prev: any) => ({ ...prev, [`${hand}-${fingerName}`]: { syncId: sizeSyncId, sizeMm: finalSizeMm } }));
+    
+    const sizeDoc = {
+      syncId: sizeSyncId,
+      clientId: 0,
+      clientSyncId: clientProfile.syncId,
+      fingerIndex: FINGER_MAP[`${hand}-${fingerName}`],
+      sizeMm: finalSizeMm,
+      updatedAt: Date.now()
+    };
+    try {
+      await setDoc(doc(db, "users", vendorUid, "nail_sizes", sizeSyncId), sizeDoc);
+    } catch(e) {
+      console.error("Failed to save size", e);
+    }
+  };
+
+  const saveDetails = async () => {
+    if (!clientProfile?.syncId) return;
+    try {
+      const updatedProfile = { ...clientProfile, ...editForm, updatedAt: Date.now() };
+      await setDoc(doc(db, "users", vendorUid, "clients", clientProfile.syncId), updatedProfile);
+      setClientProfile(updatedProfile);
+      setIsEditingDetails(false);
+    } catch(e) {
+      console.error("Failed to save details", e);
+    }
+  };
+
+  const handleLogin = async () => {
+    try {
+      const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({
+        prompt: 'select_account'
+      });
+      await signInWithPopup(auth, provider);
+    } catch (error) {
+      console.error("Login failed:", error);
+    }
+  };
+
+  const handleLogout = () => {
+    signOut(auth);
+  };
+
+  if (loading) {
+    return <div className="flex-grow bg-[#FFF5F8] flex items-center justify-center pt-20 pb-20"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-pink-500"></div></div>;
+  }
+
+  if (!user) {
+    return (
+      <div className="flex-grow bg-[#FFF5F8] flex flex-col items-center justify-start p-4 pt-12 sm:pt-16 text-black pb-20">
+        <div className="bg-white p-8 rounded-3xl shadow-xl w-full max-w-md text-center border border-pink-100">
+          <Image src="/logo_cropped.png" alt="UnHolly Nails Logo" width={200} height={200} className="mx-auto mb-6 drop-shadow-sm" />
+          <p className="text-neutral-500 mb-8 font-medium">Sign in to view your custom sizes, track your orders, and manage your profile.</p>
+          <button onClick={handleLogin} className="w-full bg-pink-500 text-white py-4 rounded-xl font-bold hover:bg-pink-600 transition flex items-center justify-center gap-3 shadow-md">
+            Sign in with Google
+          </button>
+          <Link href="/" className="block mt-6 text-sm text-neutral-400 hover:text-black">← Back to Store</Link>
+        </div>
+      </div>
+    );
+  }
+
+  if (needsSetup) {
+    return (
+      <div className="flex-grow bg-[#FFF5F8] flex flex-col items-center justify-start p-4 pt-12 sm:pt-16 text-black pb-20">
+        <div className="bg-white p-8 rounded-3xl shadow-xl w-full max-w-md">
+          <div className="text-center mb-6">
+            <h1 className={`${dancingScript.className} text-4xl text-pink-500 font-bold mb-2`}>Welcome to the Club!</h1>
+            <p className="text-neutral-500 text-sm">
+              Already a member? Enter your Instagram handle below to instantly link your past orders, custom sizes, and delivery details! If you are new, this will create your profile.
+            </p>
+          </div>
+          
+          <div className="space-y-4">
+            <div>
+              <label className="block text-xs font-bold text-neutral-500 uppercase mb-2">Instagram Handle</label>
+              <div className="flex relative">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400 font-bold">@</span>
+                <input 
+                  type="text" 
+                  value={setupInsta}
+                  onChange={(e) => setSetupInsta(e.target.value)}
+                  placeholder="your_handle"
+                  className="w-full bg-neutral-50 border border-neutral-200 rounded-xl py-3 pl-10 pr-4 focus:outline-none focus:border-pink-500 focus:bg-white transition"
+                  onKeyDown={(e) => e.key === 'Enter' && handleSetupProfile()}
+                />
+              </div>
+            </div>
+            
+            {setupError && (
+              <p className="text-red-500 text-xs font-bold bg-red-50 p-3 rounded-lg border border-red-100">{setupError}</p>
+            )}
+            
+            <button 
+              onClick={() => handleSetupProfile(false)} 
+              disabled={isSettingUp}
+              className="w-full bg-pink-500 text-white py-4 rounded-xl font-bold hover:bg-pink-600 transition flex items-center justify-center gap-3 disabled:opacity-50"
+            >
+              {isSettingUp ? "Linking Profile..." : "Link Profile"}
+            </button>
+            <div className="flex justify-between items-center mt-2">
+              <button onClick={() => handleSetupProfile(true)} className="text-neutral-500 text-xs font-bold hover:text-black py-2">
+                Skip for now
+              </button>
+              <button onClick={handleLogout} className="text-red-400 text-xs font-bold hover:text-red-600 py-2">
+                Sign Out
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-[calc(100vh-120px)] bg-[#FFF5F8] text-black pb-20">
+      <div className="pt-12 pb-2 px-4 text-center">
+        <h1 className="text-2xl font-black text-black">{clientProfile?.name || 'My Profile'}</h1>
+      </div>
+
+      {/* Tabs */}
+      <div className="bg-white shadow-sm border-b border-pink-100 flex justify-center gap-8 px-4 py-3 sticky top-[60px] z-30">
+        <button 
+          onClick={() => setActiveTab('sizing')}
+          className={`flex flex-col items-center gap-1 transition-colors ${activeTab === 'sizing' ? 'text-pink-500' : 'text-neutral-400 hover:text-neutral-600'}`}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M9.53 16.122a3 3 0 00-5.78 1.128 2.25 2.25 0 01-2.4 2.245 4.5 4.5 0 008.4-2.245c0-.399-.078-.78-.22-1.128zm0 0a15.998 15.998 0 003.388-1.62m-5.043-.025a15.994 15.994 0 011.622-3.395m3.42 3.42a15.995 15.995 0 004.764-4.648l3.876-5.814a1.151 1.151 0 00-1.597-1.597L14.146 6.32a15.996 15.996 0 00-4.649 4.763m3.42 3.42a6.776 6.776 0 00-3.42-3.42" /></svg>
+          <span className="text-[10px] font-bold uppercase tracking-wider">Sizing</span>
+          {activeTab === 'sizing' && <div className="w-full h-0.5 bg-pink-500 rounded-full mt-1" />}
+        </button>
+        <button 
+          onClick={() => setActiveTab('orders')}
+          className={`flex flex-col items-center gap-1 transition-colors ${activeTab === 'orders' ? 'text-pink-500' : 'text-neutral-400 hover:text-neutral-600'}`}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M11.48 3.499a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.563.563 0 00-.586 0L6.982 20.54a.562.562 0 01-.84-.61l1.285-5.386a.562.562 0 00-.182-.557l-4.204-3.602a.563.563 0 01.321-.988l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z" /></svg>
+          <span className="text-[10px] font-bold uppercase tracking-wider">Orders & Loyalty</span>
+          {activeTab === 'orders' && <div className="w-full h-0.5 bg-pink-500 rounded-full mt-1" />}
+        </button>
+        <button 
+          onClick={() => setActiveTab('details')}
+          className={`flex flex-col items-center gap-1 transition-colors ${activeTab === 'details' ? 'text-pink-500' : 'text-neutral-400 hover:text-neutral-600'}`}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M15 9h3.75M15 12h3.75M15 15h3.75M4.5 19.5h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5zm6-10.125a1.875 1.875 0 11-3.75 0 1.875 1.875 0 013.75 0zm1.294 6.336a6.721 6.721 0 01-3.17.789 6.721 6.721 0 01-3.168-.789 3.376 3.376 0 016.338 0z" /></svg>
+          <span className="text-[10px] font-bold uppercase tracking-wider">Details</span>
+          {activeTab === 'details' && <div className="w-full h-0.5 bg-pink-500 rounded-full mt-1" />}
+        </button>
+      </div>
+
+      <main className="max-w-4xl mx-auto p-4 mt-6">
+        {activeTab === 'sizing' && (
+          <div className="bg-white rounded-3xl p-6 shadow-sm border border-pink-100 flex flex-col items-center">
+            
+            {/* Visual Hands */}
+            <div className="relative w-full max-w-lg mb-8 flex justify-center items-end gap-2 px-2">
+              
+              {/* Left Hand Container */}
+              <div className="relative w-1/2 aspect-[3/4]">
+                <Image src="/hand_left.jpg" alt="Left Hand" fill className="object-contain" />
+                
+                {/* Left Hand Sizing Circles */}
+                {/* Pinky */}
+                <input type="number" step="0.1" placeholder="?"
+                  className="absolute top-[29%] left-[8%] w-12 h-12 rounded-full border-2 border-pink-400 bg-pink-100/60 flex items-center justify-center text-center text-pink-500 font-bold text-sm hover:bg-pink-100 transition shadow-sm z-10 backdrop-blur-[2px] focus:outline-none focus:ring-2 focus:ring-pink-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  value={sizes['Left-Pinky']?.sizeMm ?? ''}
+                  onChange={(e) => handleSizeChange('Left', 'Pinky', e.target.value)}
+                  onBlur={() => handleSizeSave('Left', 'Pinky')}
+                />
+                {/* Ring */}
+                <input type="number" step="0.1" placeholder="?"
+                  className="absolute top-[14%] left-[34%] w-12 h-12 rounded-full border-2 border-pink-400 bg-pink-100/60 flex items-center justify-center text-center text-pink-500 font-bold text-sm hover:bg-pink-100 transition shadow-sm z-10 backdrop-blur-[2px] focus:outline-none focus:ring-2 focus:ring-pink-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  value={sizes['Left-Ring']?.sizeMm ?? ''}
+                  onChange={(e) => handleSizeChange('Left', 'Ring', e.target.value)}
+                  onBlur={() => handleSizeSave('Left', 'Ring')}
+                />
+                {/* Middle */}
+                <input type="number" step="0.1" placeholder="?"
+                  className="absolute top-[10%] left-[52%] w-12 h-12 rounded-full border-2 border-pink-400 bg-pink-100/60 flex items-center justify-center text-center text-pink-500 font-bold text-sm hover:bg-pink-100 transition shadow-sm z-10 backdrop-blur-[2px] focus:outline-none focus:ring-2 focus:ring-pink-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  value={sizes['Left-Middle']?.sizeMm ?? ''}
+                  onChange={(e) => handleSizeChange('Left', 'Middle', e.target.value)}
+                  onBlur={() => handleSizeSave('Left', 'Middle')}
+                />
+                {/* Pointer */}
+                <input type="number" step="0.1" placeholder="?"
+                  className="absolute top-[18%] left-[73%] w-12 h-12 rounded-full border-2 border-pink-400 bg-pink-100/60 flex items-center justify-center text-center text-pink-500 font-bold text-sm hover:bg-pink-100 transition shadow-sm z-10 backdrop-blur-[2px] focus:outline-none focus:ring-2 focus:ring-pink-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  value={sizes['Left-Index']?.sizeMm ?? ''}
+                  onChange={(e) => handleSizeChange('Left', 'Index', e.target.value)}
+                  onBlur={() => handleSizeSave('Left', 'Index')}
+                />
+                {/* Thumb */}
+                <input type="number" step="0.1" placeholder="?"
+                  className="absolute top-[68%] left-[78%] w-12 h-12 rounded-full border-2 border-pink-400 bg-pink-100/60 flex items-center justify-center text-center text-pink-500 font-bold text-sm hover:bg-pink-100 transition shadow-sm z-10 backdrop-blur-[2px] focus:outline-none focus:ring-2 focus:ring-pink-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  value={sizes['Left-Thumb']?.sizeMm ?? ''}
+                  onChange={(e) => handleSizeChange('Left', 'Thumb', e.target.value)}
+                  onBlur={() => handleSizeSave('Left', 'Thumb')}
+                />
+              </div>
+
+              {/* Right Hand Container */}
+              <div className="relative w-1/2 aspect-[3/4]">
+                <Image src="/hand_right.jpg" alt="Right Hand" fill className="object-contain" />
+                
+                {/* Right Hand Sizing Circles (Mirrored) */}
+                {/* Thumb */}
+                <input type="number" step="0.1" placeholder="?"
+                  className="absolute top-[68%] right-[78%] w-12 h-12 rounded-full border-2 border-pink-400 bg-pink-100/60 flex items-center justify-center text-center text-pink-500 font-bold text-sm hover:bg-pink-100 transition shadow-sm z-10 backdrop-blur-[2px] focus:outline-none focus:ring-2 focus:ring-pink-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  value={sizes['Right-Thumb']?.sizeMm ?? ''}
+                  onChange={(e) => handleSizeChange('Right', 'Thumb', e.target.value)}
+                  onBlur={() => handleSizeSave('Right', 'Thumb')}
+                />
+                {/* Pointer */}
+                <input type="number" step="0.1" placeholder="?"
+                  className="absolute top-[18%] right-[73%] w-12 h-12 rounded-full border-2 border-pink-400 bg-pink-100/60 flex items-center justify-center text-center text-pink-500 font-bold text-sm hover:bg-pink-100 transition shadow-sm z-10 backdrop-blur-[2px] focus:outline-none focus:ring-2 focus:ring-pink-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  value={sizes['Right-Index']?.sizeMm ?? ''}
+                  onChange={(e) => handleSizeChange('Right', 'Index', e.target.value)}
+                  onBlur={() => handleSizeSave('Right', 'Index')}
+                />
+                {/* Middle */}
+                <input type="number" step="0.1" placeholder="?"
+                  className="absolute top-[10%] right-[52%] w-12 h-12 rounded-full border-2 border-pink-400 bg-pink-100/60 flex items-center justify-center text-center text-pink-500 font-bold text-sm hover:bg-pink-100 transition shadow-sm z-10 backdrop-blur-[2px] focus:outline-none focus:ring-2 focus:ring-pink-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  value={sizes['Right-Middle']?.sizeMm ?? ''}
+                  onChange={(e) => handleSizeChange('Right', 'Middle', e.target.value)}
+                  onBlur={() => handleSizeSave('Right', 'Middle')}
+                />
+                {/* Ring */}
+                <input type="number" step="0.1" placeholder="?"
+                  className="absolute top-[14%] right-[34%] w-12 h-12 rounded-full border-2 border-pink-400 bg-pink-100/60 flex items-center justify-center text-center text-pink-500 font-bold text-sm hover:bg-pink-100 transition shadow-sm z-10 backdrop-blur-[2px] focus:outline-none focus:ring-2 focus:ring-pink-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  value={sizes['Right-Ring']?.sizeMm ?? ''}
+                  onChange={(e) => handleSizeChange('Right', 'Ring', e.target.value)}
+                  onBlur={() => handleSizeSave('Right', 'Ring')}
+                />
+                {/* Pinky */}
+                <input type="number" step="0.1" placeholder="?"
+                  className="absolute top-[29%] right-[8%] w-12 h-12 rounded-full border-2 border-pink-400 bg-pink-100/60 flex items-center justify-center text-center text-pink-500 font-bold text-sm hover:bg-pink-100 transition shadow-sm z-10 backdrop-blur-[2px] focus:outline-none focus:ring-2 focus:ring-pink-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  value={sizes['Right-Pinky']?.sizeMm ?? ''}
+                  onChange={(e) => handleSizeChange('Right', 'Pinky', e.target.value)}
+                  onBlur={() => handleSizeSave('Right', 'Pinky')}
+                />
+              </div>
+
+            </div>
+
+            {/* Default Shape & Length Pill */}
+            <button className="bg-pink-100 text-pink-900 font-bold px-8 py-3 rounded-full flex items-center gap-2 hover:bg-pink-200 transition shadow-sm border border-pink-200 cursor-pointer">
+              ✨ {clientProfile?.defaultLength || 'M'} {clientProfile?.defaultShape || 'Round'}
+            </button>
+          </div>
+        )}
+
+        {activeTab === 'details' && (
+          <div className="bg-white rounded-3xl p-6 shadow-sm border border-pink-100 max-w-2xl mx-auto">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-lg text-neutral-500 font-medium">Contact Details</h2>
+              {!isEditingDetails ? (
+                <button onClick={() => setIsEditingDetails(true)} className="text-pink-400 hover:text-pink-600 transition p-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5"><path d="M21.731 2.269a2.625 2.625 0 00-3.712 0l-1.157 1.158 3.712 3.712 1.158-1.157a2.625 2.625 0 000-3.713zM19.513 8.199l-3.712-3.712-12.15 12.15a5.25 5.25 0 00-1.32 2.214l-.8 2.685a.75.75 0 00.933.933l2.685-.8a5.25 5.25 0 002.214-1.32L19.513 8.2z" /></svg>
+                </button>
+              ) : (
+                <button onClick={saveDetails} className="bg-pink-500 text-white px-4 py-1.5 rounded-full font-bold text-sm hover:bg-pink-600 transition shadow-sm">
+                  Save
+                </button>
+              )}
+            </div>
+            
+            <div className="space-y-5">
+              <div className="flex justify-between items-center border-b border-neutral-50 pb-3">
+                <span className="text-neutral-500 text-sm w-1/3">Instagram</span>
+                {isEditingDetails ? (
+                  <input type="text" value={editForm.instagram || ''} onChange={e => setEditForm({...editForm, instagram: e.target.value})} className="flex-1 text-right text-sm border-b border-pink-200 focus:outline-none focus:border-pink-500 pb-1" placeholder="@username" />
+                ) : (
+                  <span className={clientProfile?.instagram ? "text-pink-500 font-medium text-sm underline" : "text-neutral-400 font-medium text-sm"}>
+                    {clientProfile?.instagram ? `@${clientProfile.instagram.replace('@', '')}` : 'Not set'}
+                  </span>
+                )}
+              </div>
+              <div className="flex justify-between items-center border-b border-neutral-50 pb-3">
+                <span className="text-neutral-500 text-sm w-1/3">Email</span>
+                {isEditingDetails ? (
+                  <input type="email" value={editForm.email || ''} onChange={e => setEditForm({...editForm, email: e.target.value})} className="flex-1 text-right text-sm border-b border-pink-200 focus:outline-none focus:border-pink-500 pb-1" placeholder="email@address.com" />
+                ) : (
+                  <span className="text-neutral-700 font-medium text-sm text-right max-w-[60%] truncate">{clientProfile?.email || 'Not set'}</span>
+                )}
+              </div>
+              <div className="flex justify-between items-center border-b border-neutral-50 pb-3">
+                <span className="text-neutral-500 text-sm w-1/3">Phone Number</span>
+                {isEditingDetails ? (
+                  <input type="tel" value={editForm.phone || ''} onChange={e => setEditForm({...editForm, phone: e.target.value})} className="flex-1 text-right text-sm border-b border-pink-200 focus:outline-none focus:border-pink-500 pb-1" placeholder="Phone Number" />
+                ) : (
+                  <span className="text-neutral-700 font-medium text-sm text-right max-w-[60%] truncate">{clientProfile?.phone || 'Not set'}</span>
+                )}
+              </div>
+              <div className="flex justify-between items-start border-b border-neutral-50 pb-3">
+                <span className="text-neutral-500 text-sm whitespace-nowrap mt-0.5 w-1/3">Address</span>
+                {isEditingDetails ? (
+                  <textarea value={editForm.address || ''} onChange={e => setEditForm({...editForm, address: e.target.value})} className="flex-1 text-right text-sm border border-pink-200 rounded p-2 focus:outline-none focus:border-pink-500 min-h-[80px]" placeholder="Full Shipping Address" />
+                ) : (
+                  <span className="text-neutral-700 font-medium text-sm text-right max-w-[60%] leading-relaxed">{clientProfile?.address || 'Not set'}</span>
+                )}
+              </div>
+              <div className="flex justify-between items-center border-b border-neutral-50 pb-3">
+                <span className="text-neutral-500 text-sm w-1/3">Birthday</span>
+                {isEditingDetails ? (
+                  <input type="date" value={editForm.birthday ? new Date(editForm.birthday).toISOString().split('T')[0] : ''} onChange={e => setEditForm({...editForm, birthday: e.target.value ? new Date(e.target.value).getTime() : null})} className="flex-1 text-right text-sm border-b border-pink-200 focus:outline-none focus:border-pink-500 pb-1" />
+                ) : (
+                  <span className="text-neutral-700 font-medium text-sm">{clientProfile?.birthday ? new Date(clientProfile.birthday).toLocaleDateString() : 'Not set'}</span>
+                )}
+              </div>
+              <div className="flex justify-between items-start border-b border-neutral-50 pb-3">
+                <span className="text-neutral-500 text-sm mt-1 w-1/3">Preferred Shape</span>
+                {isEditingDetails ? (
+                  <div className="flex-1 flex flex-col items-end gap-2">
+                    <select 
+                      value={["Mini", "Almond", "Stiletto", "Coffin", "Square", "Oval", "Round"].includes(editForm.defaultShape) ? editForm.defaultShape : (editForm.defaultShape ? "Custom" : "")}
+                      onChange={e => {
+                        if (e.target.value !== "Custom") {
+                          setEditForm({...editForm, defaultShape: e.target.value});
+                        } else {
+                          setEditForm({...editForm, defaultShape: "Custom Shape"});
+                        }
+                      }}
+                      className="text-right text-sm border-b border-pink-200 focus:outline-none focus:border-pink-500 pb-1 font-bold bg-transparent w-full"
+                    >
+                      <option value="" disabled>Select...</option>
+                      <option value="Mini">Mini</option>
+                      <option value="Almond">Almond</option>
+                      <option value="Stiletto">Stiletto</option>
+                      <option value="Coffin">Coffin</option>
+                      <option value="Square">Square</option>
+                      <option value="Oval">Oval</option>
+                      <option value="Round">Round</option>
+                      <option value="Custom">Custom...</option>
+                    </select>
+                    {!["", "Mini", "Almond", "Stiletto", "Coffin", "Square", "Oval", "Round"].includes(editForm.defaultShape) && (
+                      <input type="text" value={editForm.defaultShape || ''} onChange={e => setEditForm({...editForm, defaultShape: e.target.value})} className="w-full text-right text-sm border-b border-pink-200 focus:outline-none focus:border-pink-500 pb-1 font-bold" placeholder="Type custom shape..." autoFocus />
+                    )}
+                  </div>
+                ) : (
+                  <span className="text-black font-bold text-sm mt-1">{clientProfile?.defaultShape || 'Round'}</span>
+                )}
+              </div>
+              <div className="flex justify-between items-start">
+                <span className="text-neutral-500 text-sm mt-1 w-1/3">Preferred Length</span>
+                {isEditingDetails ? (
+                  <div className="flex-1 flex flex-col items-end gap-2">
+                    <select 
+                      value={["XS", "S", "M", "L", "XL"].includes(editForm.defaultLength) ? editForm.defaultLength : (editForm.defaultLength ? "Custom" : "")}
+                      onChange={e => {
+                        if (e.target.value !== "Custom") {
+                          setEditForm({...editForm, defaultLength: e.target.value});
+                        } else {
+                          setEditForm({...editForm, defaultLength: "Custom Length"});
+                        }
+                      }}
+                      className="text-right text-sm border-b border-pink-200 focus:outline-none focus:border-pink-500 pb-1 font-bold bg-transparent w-full"
+                    >
+                      <option value="" disabled>Select...</option>
+                      <option value="XS">XS</option>
+                      <option value="S">S</option>
+                      <option value="M">M</option>
+                      <option value="L">L</option>
+                      <option value="XL">XL</option>
+                      <option value="Custom">Custom...</option>
+                    </select>
+                    {!["", "XS", "S", "M", "L", "XL"].includes(editForm.defaultLength) && (
+                      <input type="text" value={editForm.defaultLength || ''} onChange={e => setEditForm({...editForm, defaultLength: e.target.value})} className="w-full text-right text-sm border-b border-pink-200 focus:outline-none focus:border-pink-500 pb-1 font-bold" placeholder="Type custom length..." autoFocus />
+                    )}
+                  </div>
+                ) : (
+                  <span className="text-black font-bold text-sm mt-1">{clientProfile?.defaultLength || 'M'}</span>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'orders' && (
+          <div className="max-w-2xl mx-auto space-y-4">
+            {/* Loyalty Card - Physical Card Aspect Ratio */}
+            <div className="max-w-md mx-auto w-full aspect-[1.586/1] bg-gradient-to-br from-[#FFF0F5] to-white rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.08)] border border-pink-200/60 p-6 flex flex-col relative overflow-hidden">
+              
+              {/* Soft splashback background */}
+              <div className="absolute top-0 right-0 w-64 h-64 bg-pink-200/30 rounded-full blur-3xl pointer-events-none -translate-y-1/2 translate-x-1/4" />
+              <div className="absolute bottom-0 left-0 w-64 h-64 bg-pink-100/50 rounded-full blur-3xl pointer-events-none translate-y-1/4 -translate-x-1/4" />
+
+              {/* Card Header */}
+              <div className="flex flex-col items-center justify-center z-10 w-full mt-2">
+                <h3 className={`${dancingScript.className} text-pink-500 text-[2.75rem] leading-none drop-shadow-sm`}>UnHolly Nails</h3>
+                <p className="text-[10px] text-pink-400 mt-2 uppercase tracking-[0.2em] font-bold drop-shadow-sm">5th Order Free Delivery</p>
+              </div>
+
+              {/* Card Stamps (Middle Row) */}
+              <div className="flex justify-center items-center gap-3 mt-auto mb-auto w-full z-10">
+                {[1, 2, 3, 4, 5].map(i => {
+                  const computedStamps = orders.reduce((sum: number, o: any) => o.earnsStamp !== false ? sum + (o.setCount || 1) : sum, 0);
+                  const currentStamps = computedStamps % 5;
+                  const hasStamp = i <= currentStamps;
+                  const isReward = i === 5;
+                  
+                  return (
+                    <div key={i} className={`w-12 h-12 rounded-full border-[1.5px] flex flex-col items-center justify-center relative transition-all duration-300 ${hasStamp ? 'bg-pink-100 border-pink-400 shadow-[inset_0_2px_4px_rgba(0,0,0,0.05)]' : 'bg-white/50 backdrop-blur-sm border-pink-300 border-dashed'}`}>
+                      {isReward && !hasStamp && (
+                        <span className="text-[8px] font-black text-pink-300 uppercase text-center leading-tight drop-shadow-sm">Free<br/>Deliv</span>
+                      )}
+                      <Image src="/logo_cropped.png" alt="Stamp" width={32} height={32} className={`object-contain transition-all duration-300 ${hasStamp ? 'opacity-90 scale-100' : 'opacity-0 scale-50 absolute'} ${isReward && hasStamp ? 'scale-110' : ''}`} style={hasStamp ? { filter: 'contrast(1.2) sepia(1) hue-rotate(290deg) saturate(3)' } : {}} />
+                    </div>
+                  );
+                })}
+              </div>
+              
+              {/* Footer */}
+              <div className="flex justify-between items-end z-10 w-full mb-1 px-1">
+                <p className="text-[10px] text-pink-700 tracking-wide drop-shadow-sm">{clientProfile?.name || 'Client'}</p>
+                <p className="text-[10px] text-pink-600 uppercase tracking-wider drop-shadow-sm">{orders.length} Total Purchases</p>
+              </div>
+              
+              {/* Decorative background logo */}
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-20 pointer-events-none scale-[2] mix-blend-multiply">
+                <Image src="/logo_cropped.png" alt="Background" width={200} height={200} />
+              </div>
+            </div>
+
+            {/* History Accordion */}
+            <div className="space-y-3 mt-8">
+              <h3 className="font-bold text-neutral-800 text-lg px-2">Order History</h3>
+              {orders.length === 0 ? (
+                <div className="text-center p-8 bg-white rounded-2xl border border-pink-100 shadow-sm">
+                  <p className="text-neutral-400 text-sm">No orders found yet.</p>
+                </div>
+              ) : (
+                orders.map((o: any) => (
+                  <div key={o.syncId} className="bg-white rounded-2xl p-4 shadow-sm border border-pink-100 flex items-center justify-between transition">
+                    <div className="flex flex-col gap-1">
+                      <h4 className="font-bold text-sm text-neutral-800">{o.setName || 'Custom Order'}</h4>
+                      <div className="flex gap-2 items-center">
+                        <span className="text-xs text-neutral-500">{new Date(o.orderDate || o.updatedAt || Date.now()).toLocaleDateString()}</span>
+                        <span className="text-[10px] bg-neutral-100 text-neutral-600 px-2 py-0.5 rounded font-bold uppercase">{o.status || 'Pending'}</span>
+                      </div>
+                    </div>
+                    <div className="text-right flex flex-col items-end gap-1">
+                      <span className="font-black text-pink-500 text-sm">€{Number(o.price || 0).toFixed(2)}</span>
+                      {o.earnsStamp !== false && (
+                        <span className="text-[10px] text-pink-400 font-bold flex items-center gap-1">
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3"><path fillRule="evenodd" d="M10.788 3.21c.448-1.077 1.976-1.077 2.424 0l2.082 5.007 5.404.433c1.164.093 1.636 1.545.749 2.305l-4.117 3.527 1.257 5.273c.271 1.136-.964 2.033-1.96 1.425L12 18.354 7.373 21.18c-.996.608-2.231-.29-1.96-1.425l1.257-5.273-4.117-3.527c-.887-.76-.415-2.212.749-2.305l5.404-.433 2.082-5.006z" clipRule="evenodd" /></svg>
+                          +{o.setCount || 1} Stamp
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}
