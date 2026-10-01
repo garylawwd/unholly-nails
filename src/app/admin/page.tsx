@@ -32,6 +32,7 @@ export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<"inventory" | "collections">("inventory");
   
   const [inventory, setInventory] = useState<Product[]>([]);
+  const [inventoryFilter, setInventoryFilter] = useState<string>("All");
   const [loadingInventory, setLoadingInventory] = useState(false);
   
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -415,6 +416,19 @@ export default function AdminDashboard() {
               </button>
             </header>
 
+            {/* Filter Chips */}
+            <div className="flex gap-2 overflow-x-auto pb-4 mb-2 no-scrollbar">
+              {['All', 'Sets', 'Keychains', 'Earrings', 'Accessories', 'Basics'].map(filter => (
+                <button
+                  key={filter}
+                  onClick={() => setInventoryFilter(filter)}
+                  className={`px-4 py-1.5 rounded-full text-sm font-bold whitespace-nowrap transition-colors border ${inventoryFilter === filter ? 'bg-black text-white border-black' : 'bg-white text-neutral-500 border-neutral-200 hover:border-black hover:text-black'}`}
+                >
+                  {filter}
+                </button>
+              ))}
+            </div>
+
             {/* Bulk Action Bar */}
             {selectedIds.size > 0 && (
               <div className="bg-pink-100 border border-pink-200 rounded-2xl p-4 mb-6 flex items-center gap-4 sticky top-4 z-10 shadow-lg shadow-pink-100/50">
@@ -425,48 +439,50 @@ export default function AdminDashboard() {
                   <button onClick={handleBulkAddTag} className="bg-black text-white px-4 py-1.5 rounded text-sm font-bold">Add Tag</button>
                 </div>
 
-                <div className="h-6 w-px bg-pink-300 mx-2"></div>
+                <div className="h-6 w-px bg-pink-300 mx-2 hidden sm:block"></div>
                 
-                <button onClick={() => handleBulkToggleVisibility(true)} className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-bold transition">Publish to Store</button>
-                <button onClick={() => handleBulkToggleVisibility(false)} className="bg-neutral-800 hover:bg-black text-white px-4 py-2 rounded-lg text-sm font-bold transition">Hide from Store</button>
+                <div className="hidden sm:flex items-center gap-4">
+                  <button onClick={() => handleBulkToggleVisibility(true)} className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-bold transition">Publish to Store</button>
+                  <button onClick={() => handleBulkToggleVisibility(false)} className="bg-neutral-800 hover:bg-black text-white px-4 py-2 rounded-lg text-sm font-bold transition">Hide from Store</button>
+                </div>
               </div>
             )}
 
             {loadingInventory ? (
               <div className="animate-pulse flex space-x-4"><div className="h-10 bg-neutral-200 rounded w-full"></div></div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {inventory.map(item => {
+              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-4">
+                {inventory.filter(i => inventoryFilter === "All" ? true : i.type === inventoryFilter).map(item => {
                   // @ts-ignore
                   const isPublic = item.isForSale;
                   return (
-                    <div key={item.id} className={`bg-white rounded-2xl border p-4 shadow-sm flex flex-col gap-3 transition ${selectedIds.has(item.id) ? 'ring-2 ring-pink-500 border-pink-500' : 'hover:border-neutral-300'}`}>
+                    <div key={item.id} className={`bg-white rounded-xl md:rounded-2xl border p-3 md:p-4 shadow-sm flex flex-col gap-2 transition ${selectedIds.has(item.id) ? 'ring-2 ring-pink-500 border-pink-500' : 'hover:border-neutral-300'}`}>
                       <div className="flex justify-between items-start">
-                        <input type="checkbox" checked={selectedIds.has(item.id)} onChange={() => toggleSelection(item.id)} className="w-5 h-5 accent-pink-500" />
-                        {isPublic ? <span className="bg-green-100 text-green-700 px-2 py-1 rounded text-xs font-bold">Live</span> : <span className="bg-neutral-100 text-neutral-500 px-2 py-1 rounded text-xs font-bold">Hidden</span>}
+                        <input type="checkbox" checked={selectedIds.has(item.id)} onChange={() => toggleSelection(item.id)} className="w-4 h-4 md:w-5 md:h-5 accent-pink-500" />
+                        {isPublic ? <span className="bg-green-100 text-green-700 px-1.5 md:px-2 py-0.5 md:py-1 rounded text-[10px] md:text-xs font-bold">Live</span> : <span className="bg-neutral-100 text-neutral-500 px-1.5 md:px-2 py-0.5 md:py-1 rounded text-[10px] md:text-xs font-bold">Hidden</span>}
                       </div>
-                      <div className="flex items-center gap-4 mt-2">
-                        <div className="w-16 h-16 bg-neutral-100 rounded-xl overflow-hidden relative border shrink-0">
+                      <div className="flex items-center gap-2 md:gap-4 mt-1">
+                        <div className="w-12 h-12 md:w-16 md:h-16 bg-neutral-100 rounded-xl overflow-hidden relative border shrink-0">
                           {item.imagePath ? (
                             <Image src={item.imagePath} alt="" fill className="object-cover" />
                           ) : (
-                            <div className="absolute inset-0 flex items-center justify-center text-[10px] text-center text-neutral-400 font-bold p-1 leading-tight">No Image</div>
+                            <div className="absolute inset-0 flex items-center justify-center text-[8px] md:text-[10px] text-center text-neutral-400 font-bold p-1 leading-tight">No Image</div>
                           )}
                         </div>
-                        <div className="flex flex-col">
-                          <span className="font-bold text-base leading-tight text-neutral-900">{item.name}</span>
-                          <span className="font-bold text-pink-600 text-sm mt-1">{item.priceOnAsk ? 'POA' : `€${item.basePrice.toFixed(2)}`}</span>
+                        <div className="flex flex-col min-w-0">
+                          <span className="font-bold text-sm md:text-base leading-tight text-neutral-900 truncate">{item.name}</span>
+                          <span className="font-bold text-pink-600 text-xs md:text-sm mt-0.5">{item.priceOnAsk ? 'POA' : `€${item.basePrice.toFixed(2)}`}</span>
                         </div>
                       </div>
-                      <div className="flex flex-wrap gap-1 mt-2">
+                      <div className="flex flex-wrap gap-1 mt-1 hidden md:flex">
                         {item.tags?.map((t: string) => <span key={t} className="bg-neutral-100 border text-neutral-600 text-[10px] px-2 py-0.5 rounded-full">{t}</span>)}
                         {(!item.tags || item.tags.length === 0) && <span className="text-neutral-400 italic text-xs">No tags</span>}
                       </div>
                       <button 
                         onClick={() => setEditingProduct(item)}
-                        className="mt-auto pt-3 border-t w-full text-center text-sm font-bold text-black hover:text-pink-600 transition"
+                        className="mt-auto pt-2 border-t w-full text-center text-xs md:text-sm font-bold text-black hover:text-pink-600 transition"
                       >
-                        Edit Details
+                        Edit
                       </button>
                     </div>
                   )
