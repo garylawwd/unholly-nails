@@ -575,8 +575,8 @@ export default function AdminDashboard() {
                         {!["all", "special-offers", "sets", "minis", "keychains", "earrings", "accessories", "basics", "new-custom-page"].includes(selectedTag) && (
                           <button 
                             type="button" 
-                            onClick={async () => {
-                              if (window.confirm("Are you sure you want to delete this custom page?")) {
+                            onClick={() => {
+                              confirmModal("Delete Page", "Are you sure you want to delete this custom page?", async () => {
                                 try {
                                   await deleteDoc(doc(db, "users", STORE_OWNER_UID, "collection_settings", selectedTag));
                                   setCollectionMetadata(prev => {
@@ -585,12 +585,12 @@ export default function AdminDashboard() {
                                     return next;
                                   });
                                   setSelectedTag(null);
-                                } catch(e: any) {
-                                  console.error("Delete failed", e);
-                                  showModal("Delete Failed", "Failed to delete page: " + (e.message || "Unknown error"));
-                                }
-                              }
-                            }}
+                                  } catch(e: any) {
+                                    console.error("Delete failed", e);
+                                    showModal("Delete Failed", "Failed to delete page: " + (e.message || "Unknown error"));
+                                  }
+                                });
+                              }}
                             className="bg-red-50 text-red-600 px-4 py-2 rounded-lg font-bold hover:bg-red-100 transition text-sm whitespace-nowrap"
                           >
                             Delete
@@ -762,8 +762,8 @@ export default function AdminDashboard() {
             <header className="p-4 border-b flex justify-between items-center sticky top-0 bg-white z-10">
               <h3 className="font-black text-xl">Edit Details</h3>
               <div className="flex gap-2 items-center">
-                <button type="button" onClick={async () => {
-                  if (window.confirm("Are you sure you want to permanently delete this item from your inventory?")) {
+                <button type="button" onClick={() => {
+                  confirmModal("Delete Product", "Are you sure you want to permanently delete this item from your inventory?", async () => {
                     setSavingProduct(true);
                     try {
                       await deleteDoc(doc(db, editingProduct.docPath));
@@ -774,9 +774,9 @@ export default function AdminDashboard() {
                       showModal("Error", "Failed to delete product.");
                     } finally {
                       setSavingProduct(false);
-                    }
-                  }
-                }} className="px-4 py-2 font-bold text-red-500 hover:bg-red-50 rounded-lg transition text-sm">Delete</button>
+                      }
+                    });
+                  }} className="px-4 py-2 font-bold text-red-500 hover:bg-red-50 rounded-lg transition text-sm">Delete</button>
                 <button type="button" onClick={() => setEditingProduct(null)} className="px-4 py-2 font-bold text-neutral-500 hover:text-black text-sm">Cancel</button>
                 <button type="button" onClick={saveProductDetails} disabled={savingProduct} className="bg-black text-white px-6 py-2 rounded-lg font-bold hover:bg-neutral-800 disabled:opacity-50 text-sm">
                   {savingProduct ? "Saving..." : "Save"}
