@@ -52,7 +52,7 @@ export default function GlobalHeader() {
         const layoutRef = doc(db, "users", vendorUid, "store_settings", "ribbon_layout");
         const layoutSnap = await getDoc(layoutRef);
         
-        if (layoutSnap.exists() && layoutSnap.data().order) {
+        if (layoutSnap.exists() && layoutSnap.data().order && Array.isArray(layoutSnap.data().order) && layoutSnap.data().order.length > 0) {
           setRibbonOrder(layoutSnap.data().order);
         } else {
           // Default fallback
