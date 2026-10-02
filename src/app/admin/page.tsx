@@ -576,9 +576,9 @@ export default function AdminDashboard() {
                                     return next;
                                   });
                                   setSelectedTag(null);
-                                } catch(e) {
+                                } catch(e: any) {
                                   console.error("Delete failed", e);
-                                  alert("Failed to delete page.");
+                                  alert("Failed to delete page: " + (e.message || "Unknown error"));
                                 }
                               }
                             }}
