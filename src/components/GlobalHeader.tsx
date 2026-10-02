@@ -60,8 +60,8 @@ export default function GlobalHeader() {
 
   const isActive = (path: string) => pathname === path;
   
-  // Check if user is the admin (hardcoded for now based on environment variable or typical admin logic)
-  const isAdmin = user?.uid === (process.env.NEXT_PUBLIC_VENDOR_UID || "CMzpkonBxKeLboaVTUYwDWgiwNG3");
+  const VALID_ADMINS = ["0TMvGP1VIja7VzVM87MPQaacoY03", "CMzpkonBxKeLboaVTUYwDWgiwNG3"];
+  const isAdmin = user?.uid ? VALID_ADMINS.includes(user.uid) : false;
 
   return (
     <header className="sticky top-0 z-40 bg-white/70 backdrop-blur-xl shadow-sm border-b border-pink-100/50 w-full">
