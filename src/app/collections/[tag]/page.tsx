@@ -541,11 +541,14 @@ export default function CollectionPage() {
                     e.preventDefault();
                     if (draggedItemIndex === null || draggedItemIndex === index) return;
                     if (editMode && sortOption === 'newest' && activeFilters.length === 0) {
-                      const newProducts = [...products];
-                      const item = newProducts[draggedItemIndex];
-                      newProducts.splice(draggedItemIndex, 1);
-                      newProducts.splice(index, 0, item);
-                      setProducts(newProducts);
+                      setProducts(prev => {
+                        const newProducts = [...prev];
+                        const item = newProducts[draggedItemIndex];
+                        if (!item) return prev;
+                        newProducts.splice(draggedItemIndex, 1);
+                        newProducts.splice(index, 0, item);
+                        return newProducts;
+                      });
                       setDraggedItemIndex(index);
                     }
                   }}

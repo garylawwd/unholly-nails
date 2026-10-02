@@ -83,18 +83,27 @@ export default function GlobalHeader() {
     e.preventDefault();
     if (draggedItem === null || draggedItem === index) return;
     
-    const newItems = [...ribbonOrder];
-    const item = newItems[draggedItem];
-    newItems.splice(draggedItem, 1);
-    newItems.splice(index, 0, item);
-    
-    setRibbonOrder(newItems);
+    setRibbonOrder(prevOrder => {
+      const newItems = [...prevOrder];
+      const item = newItems[draggedItem];
+      if (!item) return prevOrder; // Safety check
+      newItems.splice(draggedItem, 1);
+      newItems.splice(index, 0, item);
+      return newItems;
+    });
     setDraggedItem(index);
   };
 
   const handleDragEnd = async () => {
+    const finalItem = draggedItem;
     setDraggedItem(null);
-    await saveRibbonOrder(ribbonOrder);
+    // saveRibbonOrder requires the latest state. We can use a setTimeout or a dedicated save button.
+    // However, since we just updated state, we can't reliably read ribbonOrder here immediately.
+    // We'll use a functional state update trick to read it and save it.
+    setRibbonOrder(prev => {
+      saveRibbonOrder(prev);
+      return prev;
+    });
   };
 
   const executeHide = async () => {
