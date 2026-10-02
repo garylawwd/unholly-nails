@@ -361,6 +361,12 @@ export default function AdminDashboard() {
           <p className="text-xs text-neutral-500 mt-1">{user.email}</p>
         </div>
         <nav className="flex-1 p-4 space-y-2">
+          <a 
+            href="/"
+            className="block w-full text-left px-4 py-3 rounded-xl text-sm font-bold transition text-pink-600 hover:bg-pink-50 border border-pink-100"
+          >
+            ← Return to Storefront
+          </a>
           <button 
             onClick={() => { setActiveTab("inventory"); setMobileMenuOpen(false); }}
             className={`w-full text-left px-4 py-3 rounded-xl text-sm font-bold transition ${activeTab === "inventory" ? "bg-black text-white" : "text-neutral-600 hover:bg-neutral-100"}`}

@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useState, useEffect, useMemo, useRef, KeyboardEvent } from "react";
-import { collectionGroup, collection, getDocs, doc, updateDoc, query, where } from "firebase/firestore";
+import { collectionGroup, collection, getDocs, doc, updateDoc, query, where, getDoc, setDoc } from "firebase/firestore";
 import { signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged, User } from "firebase/auth";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, auth, storage } from "@/lib/firebase";
@@ -62,9 +62,47 @@ export default function Home() {
     return () => unsubscribe();
   }, []);
 
+  const [homeContent, setHomeContent] = useState({
+    heroTitle: "Luxury Hand-Painted<br/>Press-On Nails",
+    heroSubtitle: "Salon-quality custom nail sets perfectly sized and delivered directly to your door.",
+    collectionsTitle: "Featured Collections",
+    collectionsSubtitle: "Explore our exclusive themed sets hand-painted just for you.",
+    newArrivalsTitle: "New Arrivals",
+    newArrivalsSubtitle: "Fresh out of the studio. Grab them before they're gone.",
+  });
+
+  const handleEditContent = async (field: keyof typeof homeContent, label: string) => {
+    if (!editMode) return;
+    const current = homeContent[field].replace(/<br\/>/g, '\n');
+    const newValue = window.prompt(`Edit ${label} (use Enter for new lines if needed):`, current);
+    if (newValue !== null && newValue !== current) {
+      const formattedValue = newValue.replace(/\n/g, '<br/>');
+      try {
+        const vendorUid = process.env.NEXT_PUBLIC_VENDOR_UID || "CMzpkonBxKeLboaVTUYwDWgiwNG3";
+        await setDoc(doc(db, "users", vendorUid, "store_settings", "home_content"), {
+          [field]: formattedValue
+        }, { merge: true });
+        setHomeContent(prev => ({...prev, [field]: formattedValue}));
+      } catch(e) {
+        console.error(e);
+        alert("Failed to save content.");
+      }
+    }
+  };
+
   const fetchProducts = async () => {
     try {
       const vendorUid = process.env.NEXT_PUBLIC_VENDOR_UID || "CMzpkonBxKeLboaVTUYwDWgiwNG3";
+      
+      try {
+        const homeRef = doc(db, "users", vendorUid, "store_settings", "home_content");
+        const homeSnap = await getDoc(homeRef);
+        if (homeSnap.exists()) {
+          setHomeContent(prev => ({ ...prev, ...homeSnap.data() }));
+        }
+      } catch (e) {
+        console.error("Error fetching home content", e);
+      }
       
       // Fetch Ribbon Collections
       const ribbonSnap = await getDocs(query(collection(db, "users", vendorUid, "collection_settings"), where("inRibbon", "==", true)));
@@ -253,10 +291,16 @@ export default function Home() {
                     className="w-56 sm:w-80 h-auto object-contain mb-8" 
                     priority 
                   />
-                  <h1 className="text-4xl sm:text-6xl font-black text-black mb-6 uppercase tracking-tighter leading-none">
-                    Luxury Hand-Painted<br/>Press-On Nails
-                  </h1>
-                  <p className="text-lg sm:text-xl text-neutral-500 mb-10 font-medium max-w-2xl">Salon-quality custom nail sets perfectly sized and delivered directly to your door.</p>
+                  <h1 
+                    className={`text-4xl sm:text-6xl font-black text-black mb-6 uppercase tracking-tighter leading-none ${editMode ? 'cursor-pointer hover:ring-2 ring-pink-500 rounded-xl p-2 bg-pink-50/50' : ''}`}
+                    onClick={() => handleEditContent('heroTitle', 'Hero Title')}
+                    dangerouslySetInnerHTML={{ __html: homeContent.heroTitle }}
+                  />
+                  <p 
+                    className={`text-lg sm:text-xl text-neutral-500 mb-10 font-medium max-w-2xl ${editMode ? 'cursor-pointer hover:ring-2 ring-pink-500 rounded p-2 bg-pink-50/50' : ''}`}
+                    onClick={() => handleEditContent('heroSubtitle', 'Hero Subtitle')}
+                    dangerouslySetInnerHTML={{ __html: homeContent.heroSubtitle }}
+                  />
                   <div className="flex flex-wrap gap-4 justify-center">
                     <Link href="/collections/all" className="bg-black text-white px-10 py-4 rounded-full font-black text-xs tracking-widest uppercase hover:bg-neutral-800 hover:scale-105 transition-all shadow-xl">Shop All Designs</Link>
                     <Link href="/collections/special-offers" className="bg-white border border-pink-200 text-black px-10 py-4 rounded-full font-black text-xs tracking-widest uppercase hover:border-black hover:scale-105 transition-all shadow-xl">View Promos</Link>
@@ -316,8 +360,16 @@ export default function Home() {
                 <div className="py-24 px-4 sm:px-6 w-full relative z-20">
                   <div className="max-w-7xl mx-auto">
                     <div className="text-center mb-16">
-                      <h2 className="text-4xl sm:text-5xl font-black uppercase tracking-tighter mb-4 text-black">Featured Collections</h2>
-                      <p className="text-neutral-500 font-medium">Explore our exclusive themed sets hand-painted just for you.</p>
+                      <h2 
+                        className={`text-4xl sm:text-5xl font-black uppercase tracking-tighter mb-4 text-black ${editMode ? 'cursor-pointer hover:ring-2 ring-pink-500 rounded p-2 bg-pink-50/50 inline-block' : ''}`}
+                        onClick={() => handleEditContent('collectionsTitle', 'Collections Title')}
+                        dangerouslySetInnerHTML={{ __html: homeContent.collectionsTitle }}
+                      />
+                      <p 
+                        className={`text-neutral-500 font-medium ${editMode ? 'cursor-pointer hover:ring-2 ring-pink-500 rounded p-2 bg-pink-50/50 inline-block' : ''}`}
+                        onClick={() => handleEditContent('collectionsSubtitle', 'Collections Subtitle')}
+                        dangerouslySetInnerHTML={{ __html: homeContent.collectionsSubtitle }}
+                      />
                     </div>
                     
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
@@ -354,8 +406,16 @@ export default function Home() {
                   <div className="max-w-7xl mx-auto">
                     <div className="flex flex-col sm:flex-row justify-between items-center sm:items-end mb-16 gap-6">
                       <div className="text-center sm:text-left">
-                        <h2 className="text-4xl sm:text-5xl font-black uppercase tracking-tighter mb-4 text-black">New Arrivals</h2>
-                        <p className="text-neutral-500 font-medium">Fresh out of the studio. Grab them before they're gone.</p>
+                        <h2 
+                          className={`text-4xl sm:text-5xl font-black uppercase tracking-tighter mb-4 text-black ${editMode ? 'cursor-pointer hover:ring-2 ring-pink-500 rounded p-2 bg-pink-50/50' : ''}`}
+                          onClick={() => handleEditContent('newArrivalsTitle', 'New Arrivals Title')}
+                          dangerouslySetInnerHTML={{ __html: homeContent.newArrivalsTitle }}
+                        />
+                        <p 
+                          className={`text-neutral-500 font-medium ${editMode ? 'cursor-pointer hover:ring-2 ring-pink-500 rounded p-2 bg-pink-50/50' : ''}`}
+                          onClick={() => handleEditContent('newArrivalsSubtitle', 'New Arrivals Subtitle')}
+                          dangerouslySetInnerHTML={{ __html: homeContent.newArrivalsSubtitle }}
+                        />
                       </div>
                       <Link href="/collections/all" className="bg-black text-white px-8 py-4 rounded-full font-bold text-xs hover:bg-[#FF5C9D] uppercase tracking-widest transition-colors whitespace-nowrap shadow-md">View All Designs →</Link>
                     </div>
