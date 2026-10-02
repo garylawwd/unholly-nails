@@ -49,21 +49,25 @@ export default function GlobalHeader() {
         setAllCollections(collections);
 
         // Fetch ribbon layout
-        const layoutRef = doc(db, "users", vendorUid, "store_settings", "ribbon_layout");
-        const layoutSnap = await getDoc(layoutRef);
+        let layoutData = null;
+        try {
+          const layoutRef = doc(db, "users", vendorUid, "store_settings", "ribbon_layout");
+          const layoutSnap = await getDoc(layoutRef);
+          if (layoutSnap.exists()) layoutData = layoutSnap.data();
+        } catch (err) {
+          console.warn("Could not read ribbon_layout (likely Firebase rules), using default order", err);
+        }
         
-        if (layoutSnap.exists() && layoutSnap.data().order && Array.isArray(layoutSnap.data().order) && layoutSnap.data().order.length > 0) {
-          setRibbonOrder(layoutSnap.data().order);
+        if (layoutData && layoutData.order && Array.isArray(layoutData.order) && layoutData.order.length > 0) {
+          setRibbonOrder(layoutData.order);
         } else {
-          // Default fallback
+          // Default fallback that INCLUDES custom pages!
           const defaultCore = ['home', 'special-offers', 'Sets', 'Keychains', 'Earrings', 'Accessories', 'Basics'];
           const customInRibbon = collections.filter(c => c.inRibbon && !defaultCore.includes(c.tag)).map(c => c.tag);
           setRibbonOrder([...defaultCore, ...customInRibbon, 'all']);
         }
       } catch (e) {
-        console.error("Failed to fetch ribbon", e);
-        // FATAL FALLBACK: If Firebase blocks the read (e.g. permission denied) or crashes, 
-        // we MUST render a default ribbon so the site doesn't look broken!
+        console.error("Fatal error fetching ribbon", e);
         setRibbonOrder(['home', 'special-offers', 'Sets', 'Keychains', 'Earrings', 'Accessories', 'Basics', 'all']);
       }
     };
