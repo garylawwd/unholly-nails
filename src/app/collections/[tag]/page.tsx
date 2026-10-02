@@ -20,6 +20,8 @@ const SHAPE_OPTIONS = ["Almond", "Stiletto", "Coffin", "Square", "Oval", "Round"
 const SIZE_OPTIONS = ["XS", "S", "M", "L", "Other"];
 const LENGTH_OPTIONS = ["XS", "S", "M", "L", "XL", "Other"];
 
+import ItemPickerModal from "@/components/ItemPickerModal";
+
 export default function CollectionPage() {
   const params = useParams();
   // Ensure we safely handle array params or string params
@@ -27,11 +29,14 @@ export default function CollectionPage() {
   const tag = rawTag ? decodeURIComponent(rawTag) : "";
 
   const [products, setProducts] = useState<Product[]>([]);
-  const [collectionInfo, setCollectionInfo] = useState<{ title: string; description: string; backgroundImageUrl: string; headerColor?: string; descriptionColor?: string; ombreStart?: string; ombreEnd?: string; bgScale?: number; inRibbon?: boolean; tag?: string; includedProductIds?: string[]; } | null>(null);
+  const [collectionInfo, setCollectionInfo] = useState<{ title: string; description: string; backgroundImageUrl: string; headerColor?: string; descriptionColor?: string; ombreStart?: string; ombreEnd?: string; bgScale?: number; inRibbon?: boolean; tag?: string; includedProductIds?: string[]; itemOrder?: string[] } | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeFilters, setActiveFilters] = useState<string[]>([]);
   const [sortOption, setSortOption] = useState<string>('newest'); // 'newest', 'oldest', 'az', 'za'
   const [showFilterModal, setShowFilterModal] = useState(false);
+  const [showItemPicker, setShowItemPicker] = useState(false);
+  const [draggedItemIndex, setDraggedItemIndex] = useState<number | null>(null);
+  const [itemToRemove, setItemToRemove] = useState<Product | null>(null);
 
   // Drawer state
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
@@ -72,11 +77,14 @@ export default function CollectionPage() {
     try {
       const vendorUid = process.env.NEXT_PUBLIC_VENDOR_UID || "CMzpkonBxKeLboaVTUYwDWgiwNG3";
       
+      let currentSettings: any = null;
+
       // 1. Fetch Collection Info
       const settingsRef = doc(db, "users", vendorUid, "collection_settings", tag);
       const settingsSnap = await getDoc(settingsRef);
       if (settingsSnap.exists()) {
-        setCollectionInfo(settingsSnap.data() as any);
+        currentSettings = settingsSnap.data();
+        setCollectionInfo(currentSettings);
       } else {
         // Fallback default info if no custom splashback is set
         let fallbackTitle = tag.charAt(0).toUpperCase() + tag.slice(1).replace(/-/g, " ");
@@ -90,7 +98,7 @@ export default function CollectionPage() {
           fallbackDesc = "Browse our entire collection of custom press-ons.";
         }
 
-        setCollectionInfo({
+        currentSettings = {
           title: fallbackTitle,
           description: fallbackDesc,
           backgroundImageUrl: "",
@@ -99,7 +107,8 @@ export default function CollectionPage() {
           ombreStart: "#f472b6",
           ombreEnd: "#000000",
           bgScale: 100
-        });
+        };
+        setCollectionInfo(currentSettings);
       }
 
       // 2. Fetch Products (Bypass Firebase composite index by filtering in JS)
@@ -181,13 +190,27 @@ export default function CollectionPage() {
             fetchedProducts = fetchedProducts.filter(p => p.type?.toLowerCase() === mappedType.toLowerCase() || (p.tags && p.tags.map((t: string)=>t.toLowerCase()).includes(mappedType.toLowerCase())));
           }
         } else {
-          const includedIds = collectionInfo?.includedProductIds;
+          const includedIds = currentSettings?.includedProductIds;
           if (includedIds && includedIds.length > 0) {
             fetchedProducts = fetchedProducts.filter(p => includedIds.includes(p.id));
+            // Sort custom collection by includedProductIds array order
+            fetchedProducts.sort((a, b) => includedIds.indexOf(a.id) - includedIds.indexOf(b.id));
           } else {
             fetchedProducts = fetchedProducts.filter(p => p.tags && p.tags.includes(tag));
           }
         }
+      }
+
+      // If there's an explicit itemOrder on this collection (e.g. for a core tag), apply it
+      if (currentSettings?.itemOrder && currentSettings.itemOrder.length > 0) {
+        fetchedProducts.sort((a, b) => {
+          const aIdx = currentSettings.itemOrder!.indexOf(a.id);
+          const bIdx = currentSettings.itemOrder!.indexOf(b.id);
+          if (aIdx === -1 && bIdx === -1) return 0;
+          if (aIdx === -1) return 1;
+          if (bIdx === -1) return -1;
+          return aIdx - bIdx;
+        });
       }
 
       setProducts(fetchedProducts);
@@ -319,24 +342,82 @@ export default function CollectionPage() {
           {adminUser && (
             <button 
               onClick={openInlineEditor}
-              className="absolute top-4 right-6 sm:top-12 sm:right-8 bg-black/70 text-white p-3 rounded-full hover:bg-black transition-all shadow-lg z-30 group"
-              title="Edit Collection"
+              className={`absolute top-4 right-6 sm:top-12 sm:right-8 bg-black/70 text-white p-3 rounded-full hover:bg-black transition-all shadow-lg z-30 group ${editMode ? 'ring-2 ring-pink-500 animate-pulse' : ''}`}
+              title="Theme Collection"
             >
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5 group-hover:scale-110 transition-transform"><path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" /></svg>
             </button>
           )}
-          <h1 
-            className={`${dancingScript.className} text-6xl sm:text-8xl drop-shadow-2xl`} 
-            style={{ color: collectionInfo?.headerColor || "#ffffff" }}
-          >
-            {collectionInfo?.title || tag}
-          </h1>
-          {collectionInfo?.description && (
-            <p 
-              className="mt-4 text-lg sm:text-xl font-medium drop-shadow-md max-w-2xl mx-auto"
-              style={{ color: collectionInfo?.descriptionColor || '#e5e5e5' }}
-            >{collectionInfo.description}</p>
-          )}
+          <div className="flex flex-col items-center gap-4 relative z-10 w-full max-w-4xl mx-auto">
+            <div className="relative group/title flex justify-center w-full">
+              {editMode ? (
+                <input 
+                  type="text"
+                  value={collectionInfo?.title || tag}
+                  onChange={e => setCollectionInfo((prev: any) => ({...prev, title: e.target.value}))}
+                  onBlur={async (e) => {
+                    if(!adminUser) return;
+                    const vendorUid = process.env.NEXT_PUBLIC_VENDOR_UID || "CMzpkonBxKeLboaVTUYwDWgiwNG3";
+                    await setDoc(doc(db, "users", vendorUid, "collection_settings", tag), { title: e.target.value }, { merge: true });
+                  }}
+                  className={`relative z-50 pointer-events-auto ${dancingScript.className} text-6xl sm:text-8xl drop-shadow-2xl bg-transparent border-none outline-none text-center hover:ring-2 ring-pink-500 rounded p-2`} 
+                  style={{ color: collectionInfo?.headerColor || "#ffffff", minWidth: '300px' }}
+                />
+              ) : (
+                <h1 
+                  className={`${dancingScript.className} text-6xl sm:text-8xl drop-shadow-2xl`} 
+                  style={{ color: collectionInfo?.headerColor || "#ffffff" }}
+                >
+                  {collectionInfo?.title || tag}
+                </h1>
+              )}
+              {editMode && (
+                <div className="absolute -right-2 sm:-right-12 top-1/2 -translate-y-1/2 flex items-center justify-center bg-white rounded-full p-1 shadow-lg opacity-100 transition-opacity">
+                  <input type="color" value={collectionInfo?.headerColor || '#ffffff'} onChange={async (e) => {
+                    setCollectionInfo((prev: any) => ({...prev, headerColor: e.target.value}));
+                    if(!adminUser) return;
+                    const vendorUid = process.env.NEXT_PUBLIC_VENDOR_UID || "CMzpkonBxKeLboaVTUYwDWgiwNG3";
+                    await setDoc(doc(db, "users", vendorUid, "collection_settings", tag), { headerColor: e.target.value }, { merge: true });
+                  }} className="w-6 h-6 rounded cursor-pointer border-0 p-0" title="Title Color" />
+                </div>
+              )}
+            </div>
+
+            {(collectionInfo?.description || editMode) && (
+              <div className="relative group/desc flex justify-center w-full">
+                {editMode ? (
+                  <textarea 
+                    value={collectionInfo?.description || ''}
+                    onChange={e => setCollectionInfo((prev: any) => ({...prev, description: e.target.value}))}
+                    onBlur={async (e) => {
+                      if(!adminUser) return;
+                      const vendorUid = process.env.NEXT_PUBLIC_VENDOR_UID || "CMzpkonBxKeLboaVTUYwDWgiwNG3";
+                      await setDoc(doc(db, "users", vendorUid, "collection_settings", tag), { description: e.target.value }, { merge: true });
+                    }}
+                    className="relative z-50 pointer-events-auto text-lg sm:text-xl font-medium drop-shadow-md w-full max-w-2xl bg-transparent border-none outline-none text-center hover:ring-2 ring-pink-500 rounded p-2 resize-none overflow-hidden"
+                    style={{ color: collectionInfo?.descriptionColor || '#e5e5e5' }}
+                    rows={2}
+                    placeholder="Collection description..."
+                  />
+                ) : (
+                  <p 
+                    className="text-lg sm:text-xl font-medium drop-shadow-md max-w-2xl text-center"
+                    style={{ color: collectionInfo?.descriptionColor || '#e5e5e5' }}
+                  >{collectionInfo.description}</p>
+                )}
+                {editMode && (
+                  <div className="absolute -right-2 sm:-right-12 top-1/2 -translate-y-1/2 flex items-center justify-center bg-white rounded-full p-1 shadow-lg opacity-100 transition-opacity">
+                    <input type="color" value={collectionInfo?.descriptionColor || '#e5e5e5'} onChange={async (e) => {
+                      setCollectionInfo((prev: any) => ({...prev, descriptionColor: e.target.value}));
+                      if(!adminUser) return;
+                      const vendorUid = process.env.NEXT_PUBLIC_VENDOR_UID || "CMzpkonBxKeLboaVTUYwDWgiwNG3";
+                      await setDoc(doc(db, "users", vendorUid, "collection_settings", tag), { descriptionColor: e.target.value }, { merge: true });
+                    }} className="w-6 h-6 rounded cursor-pointer border-0 p-0" title="Description Color" />
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         <main className="max-w-7xl mx-auto px-3 sm:px-6 mb-20 w-full flex-grow">
@@ -411,7 +492,7 @@ export default function CollectionPage() {
 
           {loading ? (
             <div className="flex justify-center items-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div></div>
-          ) : products.length === 0 ? (
+          ) : products.length === 0 && !editMode ? (
             <div className="text-center py-20 px-4 bg-black/40 backdrop-blur-sm rounded-3xl border border-white/10">
               <h3 className="text-xl font-bold text-white mb-2">No designs found</h3>
               <p className="text-neutral-400">There are currently no items in this collection.</p>
@@ -419,17 +500,88 @@ export default function CollectionPage() {
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6">
+              {editMode && (
+                <div 
+                  onClick={() => setShowItemPicker(true)}
+                  className="bg-white/50 backdrop-blur-md rounded-2xl p-3 shadow-inner border-2 border-dashed border-pink-300 flex flex-col items-center justify-center cursor-pointer hover:bg-pink-50 transition-colors min-h-[200px]"
+                >
+                  <div className="w-16 h-16 rounded-full bg-pink-100 text-pink-500 flex items-center justify-center text-3xl mb-4 group-hover:scale-110 transition-transform">
+                    +
+                  </div>
+                  <span className="font-bold text-pink-600 text-center uppercase tracking-widest text-xs">
+                    {['sets', 'keychains', 'earrings', 'accessories', 'basics', 'special-offers'].includes(tag.toLowerCase()) || tag === 'all' ? 'Publish Unlisted Items' : 'Add Items to Collection'}
+                  </span>
+                </div>
+              )}
               {(() => {
                 let displayed = products.filter(p => activeFilters.length === 0 || activeFilters.some(f => p.tags?.includes(f)));
                 if (sortOption === 'az') displayed.sort((a, b) => a.name.localeCompare(b.name));
                 else if (sortOption === 'za') displayed.sort((a, b) => b.name.localeCompare(a.name));
                 else if (sortOption === 'oldest') displayed.sort((a, b) => (a.updatedAt && b.updatedAt) ? a.updatedAt - b.updatedAt : a.id.localeCompare(b.id)); 
-                else displayed.sort((a, b) => (a.updatedAt && b.updatedAt) ? b.updatedAt - a.updatedAt : b.id.localeCompare(a.id)); // newest default
+                else {
+                  // For 'newest', if we have a custom item order, we maintain the array's current order (which we sorted in fetchProducts).
+                  // Otherwise, we sort by newest.
+                  const hasCustomOrder = collectionInfo?.itemOrder?.length || collectionInfo?.includedProductIds?.length;
+                  if (!hasCustomOrder) {
+                    displayed.sort((a, b) => (a.updatedAt && b.updatedAt) ? b.updatedAt - a.updatedAt : b.id.localeCompare(a.id));
+                  }
+                }
                 return displayed;
-              })().map((product) => (
-                <div key={product.id} className={`bg-white/95 backdrop-blur-md rounded-2xl p-3 shadow-2xl border ${editMode ? 'border-pink-500 ring-2 ring-pink-500/20' : 'border-white/20'} flex flex-col group relative transform transition-transform hover:-translate-y-1`}>
+              })().map((product, index) => (
+                <div 
+                  key={product.id} 
+                  draggable={editMode && sortOption === 'newest' && activeFilters.length === 0}
+                  onDragStart={(e) => {
+                    if (editMode && sortOption === 'newest' && activeFilters.length === 0) {
+                      setDraggedItemIndex(index);
+                      e.dataTransfer.effectAllowed = "move";
+                    }
+                  }}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    if (draggedItemIndex === null || draggedItemIndex === index) return;
+                    if (editMode && sortOption === 'newest' && activeFilters.length === 0) {
+                      const newProducts = [...products];
+                      const item = newProducts[draggedItemIndex];
+                      newProducts.splice(draggedItemIndex, 1);
+                      newProducts.splice(index, 0, item);
+                      setProducts(newProducts);
+                      setDraggedItemIndex(index);
+                    }
+                  }}
+                  onDragEnd={async () => {
+                    setDraggedItemIndex(null);
+                    if (editMode && sortOption === 'newest' && activeFilters.length === 0) {
+                      const newOrder = products.map(p => p.id);
+                      const vendorUid = process.env.NEXT_PUBLIC_VENDOR_UID || "CMzpkonBxKeLboaVTUYwDWgiwNG3";
+                      
+                      // Save to the appropriate array (includedProductIds for custom collections, itemOrder for core tags)
+                      const isCoreTag = ['sets', 'keychains', 'earrings', 'accessories', 'basics', 'special-offers'].includes(tag.toLowerCase()) || tag === 'all';
+                      if (!isCoreTag) {
+                        await setDoc(doc(db, "users", vendorUid, "collection_settings", tag), { includedProductIds: newOrder }, { merge: true });
+                        setCollectionInfo((prev: any) => ({...prev, includedProductIds: newOrder}));
+                      } else {
+                        await setDoc(doc(db, "users", vendorUid, "collection_settings", tag), { itemOrder: newOrder }, { merge: true });
+                        setCollectionInfo((prev: any) => ({...prev, itemOrder: newOrder}));
+                      }
+                    }
+                  }}
+                  className={`bg-white/95 backdrop-blur-md rounded-2xl p-3 shadow-2xl border ${editMode ? 'border-pink-500 ring-2 ring-pink-500/20 cursor-grab active:cursor-grabbing' : 'border-white/20'} flex flex-col group relative transform transition-all hover:-translate-y-1 ${draggedItemIndex === index ? 'opacity-50 scale-95' : ''}`}
+                >
                   {editMode && (
-                    <button onClick={() => setEditingProduct(product)} className="absolute top-4 right-4 bg-black text-white px-3 py-1.5 rounded-full text-[10px] font-bold z-20 hover:bg-neutral-800 shadow-md">✏️ EDIT</button>
+                    <div className="absolute top-4 right-4 flex gap-1 z-20">
+                      <button onClick={() => setEditingProduct(product)} className="bg-black text-white px-3 py-1.5 rounded-full text-[10px] font-bold hover:bg-neutral-800 shadow-md">✏️ EDIT</button>
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setItemToRemove(product);
+                        }}
+                        className="bg-red-500 text-white w-7 h-7 flex items-center justify-center rounded-full text-xs font-bold hover:bg-red-600 shadow-md"
+                        title="Remove Item"
+                      >
+                        ✕
+                      </button>
+                    </div>
                   )}
                   {product.isPromo && (
                     <div className="absolute top-4 left-4 bg-pink-500 text-white text-[9px] font-bold px-2.5 py-1 rounded-full z-10 shadow-sm uppercase tracking-wider">PROMO</div>
@@ -595,63 +747,23 @@ export default function CollectionPage() {
         </div>
       )}
 
-      {/* Admin Inline Editor Panel */}
+      {/* Admin Inline Theming Modal */}
       {showEditor && editData && (
-        <div className="fixed inset-0 z-[100] flex">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowEditor(false)} />
-          <div className="ml-auto relative w-full max-w-md h-full bg-white shadow-2xl overflow-y-auto text-black">
-            <div className="sticky top-0 bg-white border-b px-6 py-4 flex items-center justify-between z-10">
-              <h2 className="font-black text-lg">Edit Collection</h2>
+          <div className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden text-black animate-slide-up">
+            <div className="bg-white border-b px-6 py-4 flex items-center justify-between z-10">
+              <h2 className="font-black text-lg">Theme Collection</h2>
               <button onClick={() => setShowEditor(false)} className="text-neutral-400 hover:text-black text-xl font-bold">✕</button>
             </div>
 
-            <div className="p-6 space-y-6">
-              {/* Title */}
-              <div>
-                <label className="block text-xs font-bold text-neutral-500 uppercase mb-2">Display Title</label>
-                <input 
-                  type="text" 
-                  value={editData.title || ''} 
-                  onChange={e => setEditData((p: any) => ({ ...p, title: e.target.value }))}
-                  className="w-full border rounded-xl px-4 py-3 font-bold text-lg"
-                />
-              </div>
-
-              {/* Description */}
-              <div>
-                <label className="block text-xs font-bold text-neutral-500 uppercase mb-2">Description / Subtitle</label>
-                <textarea 
-                  value={editData.description || ''} 
-                  onChange={e => setEditData((p: any) => ({ ...p, description: e.target.value }))}
-                  className="w-full border rounded-xl px-4 py-3 h-24"
-                  placeholder="Your collection description..."
-                />
-              </div>
-
-              {/* Color Pickers */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[10px] font-bold text-neutral-500 uppercase mb-1">Title Color</label>
-                  <div className="flex flex-col items-center gap-1">
-                    <input type="color" value={editData.headerColor || '#ffffff'} onChange={e => setEditData((p: any) => ({ ...p, headerColor: e.target.value }))} className="w-10 h-10 rounded cursor-pointer border-0 p-0" />
-                    <span className="text-[10px] font-mono text-neutral-400">{editData.headerColor || '#ffffff'}</span>
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-neutral-500 uppercase mb-1">Desc Color</label>
-                  <div className="flex flex-col items-center gap-1">
-                    <input type="color" value={editData.descriptionColor || '#e5e5e5'} onChange={e => setEditData((p: any) => ({ ...p, descriptionColor: e.target.value }))} className="w-10 h-10 rounded cursor-pointer border-0 p-0" />
-                    <span className="text-[10px] font-mono text-neutral-400">{editData.descriptionColor || '#e5e5e5'}</span>
-                  </div>
-                </div>
-              </div>
-
+            <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto">
               {/* Ombre Gradient */}
               <div>
-                <label className="block text-xs font-bold text-neutral-500 uppercase mb-2">Ombre Gradient</label>
-                <div className="flex items-center gap-3">
+                <label className="block text-xs font-bold text-neutral-500 uppercase mb-2">Background Gradient</label>
+                <div className="flex items-center gap-3 bg-neutral-50 p-4 rounded-2xl border">
                   <input type="color" value={editData.ombreStart || '#f472b6'} onChange={e => setEditData((p: any) => ({ ...p, ombreStart: e.target.value }))} className="w-10 h-10 rounded cursor-pointer border-0 p-0" />
-                  <div className="flex-1 h-8 rounded-lg" style={{ background: `linear-gradient(to right, ${editData.ombreStart || '#f472b6'}, ${editData.ombreEnd || '#000000'})` }}></div>
+                  <div className="flex-1 h-8 rounded-lg shadow-inner" style={{ background: `linear-gradient(to right, ${editData.ombreStart || '#f472b6'}, ${editData.ombreEnd || '#000000'})` }}></div>
                   <input type="color" value={editData.ombreEnd || '#000000'} onChange={e => setEditData((p: any) => ({ ...p, ombreEnd: e.target.value }))} className="w-10 h-10 rounded cursor-pointer border-0 p-0" />
                 </div>
               </div>
@@ -663,13 +775,13 @@ export default function CollectionPage() {
                 </label>
                 <div className="border-2 border-dashed rounded-2xl p-4 bg-neutral-50 space-y-3">
                   {editData.backgroundImageUrl && (
-                    <div className="relative w-full h-32 rounded-xl overflow-hidden">
+                    <div className="relative w-full h-32 rounded-xl overflow-hidden shadow-sm">
                       <Image src={editData.backgroundImageUrl} alt="Current background" fill className="object-cover" />
                     </div>
                   )}
-                  <input type="file" ref={bgFileRef} accept="image/*" className="text-sm w-full" />
+                  <input type="file" ref={bgFileRef} accept="image/*" className="text-sm w-full font-medium file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-pink-50 file:text-pink-700 hover:file:bg-pink-100" />
                   <div>
-                    <label className="block text-xs font-bold text-neutral-500 mb-1">Scale: {editData.bgScale || 100}%</label>
+                    <label className="block text-xs font-bold text-neutral-500 mb-1">Background Scale: {editData.bgScale || 100}%</label>
                     <input 
                       type="range" min="10" max="300" 
                       value={editData.bgScale || 100}
@@ -679,19 +791,6 @@ export default function CollectionPage() {
                   </div>
                 </div>
               </div>
-              {/* Ribbon Toggle */}
-              <label className="flex items-center gap-3 cursor-pointer p-4 border rounded-xl hover:bg-neutral-50 transition">
-                <input 
-                  type="checkbox" 
-                  checked={editData.inRibbon || false}
-                  onChange={e => setEditData((p: any) => ({ ...p, inRibbon: e.target.checked }))}
-                  className="w-5 h-5 accent-pink-500"
-                />
-                <div>
-                  <span className="font-bold block text-sm">Show in Ribbon Menu</span>
-                  <span className="text-xs text-neutral-500">Pin to the homepage navigation.</span>
-                </div>
-              </label>
             </div>
 
             {/* Save Button */}
@@ -706,6 +805,107 @@ export default function CollectionPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Remove Item Modal */}
+      {itemToRemove && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setItemToRemove(null)}></div>
+          <div className="bg-white rounded-3xl w-full max-w-sm overflow-hidden relative shadow-2xl animate-slide-up text-center">
+            <div className="p-6">
+              <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl">✕</div>
+              <h3 className="font-black uppercase tracking-widest text-lg mb-2">Remove Item?</h3>
+              <p className="text-neutral-500 text-sm mb-6">
+                Are you sure you want to remove <span className="font-bold text-black">"{itemToRemove.name}"</span> from this collection?
+                {['sets', 'keychains', 'earrings', 'accessories', 'basics', 'all'].includes(tag.toLowerCase()) && 
+                  <span className="block mt-2 text-red-500 font-bold">This will unlist it from the live store completely!</span>
+                }
+              </p>
+              <div className="flex gap-3">
+                <button onClick={() => setItemToRemove(null)} className="flex-1 py-3 text-sm font-bold text-neutral-500 hover:bg-neutral-100 rounded-xl transition-colors">Cancel</button>
+                <button 
+                  onClick={async () => {
+                    const vendorUid = process.env.NEXT_PUBLIC_VENDOR_UID || "CMzpkonBxKeLboaVTUYwDWgiwNG3";
+                    const lowerTag = tag.toLowerCase();
+                    
+                    try {
+                      if (['sets', 'keychains', 'earrings', 'accessories', 'basics', 'all'].includes(lowerTag)) {
+                        await setDoc(doc(db, "users", vendorUid, "nail_sets", itemToRemove.id), { isForSale: false }, { merge: true });
+                        setProducts(prev => prev.filter(p => p.id !== itemToRemove.id));
+                      } else if (lowerTag === 'special-offers') {
+                        await setDoc(doc(db, "users", vendorUid, "nail_sets", itemToRemove.id), { isPromo: false }, { merge: true });
+                        setProducts(prev => prev.filter(p => p.id !== itemToRemove.id));
+                      } else {
+                        const newIds = (collectionInfo?.includedProductIds || []).filter(id => id !== itemToRemove.id);
+                        await setDoc(doc(db, "users", vendorUid, "collection_settings", tag), { includedProductIds: newIds }, { merge: true });
+                        setCollectionInfo((prev: any) => ({...prev, includedProductIds: newIds}));
+                        setProducts(prev => prev.filter(p => p.id !== itemToRemove.id));
+                      }
+                    } catch (e) {
+                      console.error(e);
+                    }
+                    setItemToRemove(null);
+                  }} 
+                  className="flex-1 py-3 text-sm font-bold text-white bg-red-500 hover:bg-red-600 rounded-xl transition-colors shadow-md shadow-red-500/20"
+                >
+                  Yes, Remove
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Item Picker Modal */}
+      {showItemPicker && (
+        <ItemPickerModal 
+          isOpen={showItemPicker}
+          onClose={() => setShowItemPicker(false)}
+          tag={tag}
+          collectionMode={
+            tag.toLowerCase() === 'special-offers' ? 'promo' :
+            ['sets', 'keychains', 'earrings', 'accessories', 'basics', 'all'].includes(tag.toLowerCase()) ? 'core' : 'custom'
+          }
+          currentItems={products}
+          onSave={async (selectedIds) => {
+            const vendorUid = process.env.NEXT_PUBLIC_VENDOR_UID || "CMzpkonBxKeLboaVTUYwDWgiwNG3";
+            const mode = tag.toLowerCase() === 'special-offers' ? 'promo' :
+              ['sets', 'keychains', 'earrings', 'accessories', 'basics', 'all'].includes(tag.toLowerCase()) ? 'core' : 'custom';
+            
+            try {
+              if (mode === 'core') {
+                // Publish unlisted items
+                for (const pid of selectedIds) {
+                  await setDoc(doc(db, "users", vendorUid, "nail_sets", pid), { isForSale: true }, { merge: true });
+                }
+              } else if (mode === 'promo') {
+                const currentPromoIds = products.map(p => p.id);
+                const toRemove = currentPromoIds.filter(id => !selectedIds.includes(id));
+                const toAdd = selectedIds.filter(id => !currentPromoIds.includes(id));
+
+                for (const pid of toAdd) {
+                  // Ensure they are also marked for sale so they show up!
+                  await setDoc(doc(db, "users", vendorUid, "nail_sets", pid), { isPromo: true, isForSale: true }, { merge: true });
+                }
+                for (const pid of toRemove) {
+                  await setDoc(doc(db, "users", vendorUid, "nail_sets", pid), { isPromo: false }, { merge: true });
+                }
+              } else {
+                // Save custom collection order
+                await setDoc(doc(db, "users", vendorUid, "collection_settings", tag), { includedProductIds: selectedIds }, { merge: true });
+                setCollectionInfo((prev: any) => ({ ...prev, includedProductIds: selectedIds }));
+                // Ensure they are also marked for sale so they show up!
+                for (const pid of selectedIds) {
+                  await setDoc(doc(db, "users", vendorUid, "nail_sets", pid), { isForSale: true }, { merge: true });
+                }
+              }
+            } catch (e) {
+              console.error(e);
+            }
+            setShowItemPicker(false);
+            window.location.reload(); // Quick refresh to grab new items/order easily
+          }}
+        />
       )}
     </div>
   );

@@ -140,10 +140,20 @@ export default function AdminDashboard() {
       items.forEach(i => i.tags?.forEach((t: string) => tags.add(t)));
       
       const metaRecord: Record<string, CollectionMeta> = {};
+      
+      // Fetch all collections from collection_settings
+      const collectionSettingsSnap = await getDocs(collection(db, "users", uid, "collection_settings"));
+      collectionSettingsSnap.docs.forEach(doc => {
+        metaRecord[doc.id] = doc.data() as CollectionMeta;
+      });
+
+      // Also ensure any tags present on items are included, even if they don't have settings yet
       for (const tag of Array.from(tags)) {
-        const metaDoc = await getDoc(doc(db, "users", uid, "collection_settings", tag));
-        if (metaDoc.exists()) {
-          metaRecord[tag] = metaDoc.data() as CollectionMeta;
+        if (!metaRecord[tag]) {
+          const metaDoc = await getDoc(doc(db, "users", uid, "collection_settings", tag));
+          if (metaDoc.exists()) {
+            metaRecord[tag] = metaDoc.data() as CollectionMeta;
+          }
         }
       }
       setCollectionMetadata(metaRecord);

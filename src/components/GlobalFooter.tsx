@@ -60,11 +60,8 @@ export default function GlobalFooter() {
           
         </div>
 
-        <div className="border-t border-neutral-100 mt-16 pt-8 flex flex-col sm:flex-row justify-between items-center gap-4">
+        <div className="border-t border-neutral-100 mt-16 pt-8 flex flex-col justify-center items-center gap-4">
           <p className="text-xs text-neutral-400">© {new Date().getFullYear()} UnHolly Nails. All rights reserved.</p>
-          <div className="flex gap-4">
-            <Link href="/admin" className="text-xs text-neutral-300 hover:text-neutral-500 transition-colors">Admin Login</Link>
-          </div>
         </div>
       </div>
     </footer>
