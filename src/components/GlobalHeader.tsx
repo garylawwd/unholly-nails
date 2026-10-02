@@ -45,7 +45,7 @@ export default function GlobalHeader() {
           tag: d.id,
           title: d.data().title || d.id,
           inRibbon: d.data().inRibbon === true
-        }));
+          })).filter(c => c.tag !== "--ribbon_layout--");
         setAllCollections(collections);
 
         // Fetch ribbon layout
@@ -226,7 +226,7 @@ export default function GlobalHeader() {
     return { title: tag.toUpperCase(), href: `/collections/${tag}` };
   };
 
-  const hiddenCollections = allCollections.filter(c => !ribbonOrder.includes(c.tag));
+  const hiddenCollections = allCollections.filter(c => !ribbonOrder.includes(c.tag) && !coreTags.map(t=>t.toLowerCase()).includes(c.tag.toLowerCase()));
   const coreTags = ['home', 'all', 'special-offers', 'Sets', 'Minis', 'Keychains', 'Earrings', 'Accessories', 'Basics'];
   const hiddenCoreTags = coreTags.filter(t => !ribbonOrder.includes(t));
 
