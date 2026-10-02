@@ -51,9 +51,20 @@ export default function GlobalHeader() {
         // Fetch ribbon layout
         let layoutData = null;
         try {
-          const layoutRef = doc(db, "users", vendorUid, "store_settings", "ribbon_layout");
+          const layoutRef = doc(db, "users", vendorUid, "collection_settings", "--ribbon_layout--");
           const layoutSnap = await getDoc(layoutRef);
-          if (layoutSnap.exists()) layoutData = layoutSnap.data();
+          if (layoutSnap.exists()) {
+              layoutData = layoutSnap.data();
+            } else {
+              try {
+                const oldLayoutRef = doc(db, "users", vendorUid, "store_settings", "ribbon_layout");
+                const oldLayoutSnap = await getDoc(oldLayoutRef);
+                if (oldLayoutSnap.exists()) {
+                  layoutData = oldLayoutSnap.data();
+                  await setDoc(layoutRef, layoutData);
+                }
+              } catch (e) {}
+            }
         } catch (err) {
           console.warn("Could not read ribbon_layout (likely Firebase rules), using default order", err);
         }
@@ -83,7 +94,7 @@ export default function GlobalHeader() {
   const saveRibbonOrder = async (newOrder: string[]) => {
     try {
       const vendorUid = process.env.NEXT_PUBLIC_VENDOR_UID || "CMzpkonBxKeLboaVTUYwDWgiwNG3";
-      await setDoc(doc(db, "users", vendorUid, "store_settings", "ribbon_layout"), { order: newOrder }, { merge: true });
+      await setDoc(doc(db, "users", vendorUid, "collection_settings", "--ribbon_layout--"), { order: newOrder }, { merge: true });
     } catch(e) { console.error("Error saving order", e); }
   };
 

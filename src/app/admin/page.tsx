@@ -144,6 +144,7 @@ export default function AdminDashboard() {
       // Fetch all collections from collection_settings
       const collectionSettingsSnap = await getDocs(collection(db, "users", uid, "collection_settings"));
       collectionSettingsSnap.docs.forEach(doc => {
+          if (doc.id === "--ribbon_layout--") return;
         metaRecord[doc.id] = doc.data() as CollectionMeta;
       });
 
