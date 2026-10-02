@@ -249,7 +249,7 @@ export default function CollectionPage() {
     if (selectedProduct) {
       const name = selectedProduct.name.toLowerCase();
       const isSizingKit = name.includes('sizing');
-      const isMiniSet = name.includes('mini') || name.includes('kids');
+      const isMiniSet = name.includes('mini') || name.includes('kids') || selectedProduct.type?.toLowerCase() === 'minis' || (selectedProduct.tags || []).some((t: string) => t.toLowerCase() === 'minis');
       
       const finalSize = isSizingKit ? 'N/A' : selectedSize;
       const finalShape = isMiniSet ? 'N/A' : selectedShape;
@@ -673,7 +673,7 @@ export default function CollectionPage() {
                   </p>
                 )}
                 
-                {!selectedProduct.name.toLowerCase().includes('mini') && !selectedProduct.name.toLowerCase().includes('kids') && (
+                {!(selectedProduct.name.toLowerCase().includes('mini') || selectedProduct.name.toLowerCase().includes('kids') || selectedProduct.type?.toLowerCase() === 'minis' || (selectedProduct.tags || []).some(t => t.toLowerCase() === 'minis')) && (
                   <div className="mb-4">
                     <div className="flex justify-between items-end mb-2">
                       <h3 className="text-sm font-bold text-neutral-900 uppercase tracking-wider">Shape</h3>
@@ -717,7 +717,7 @@ export default function CollectionPage() {
                   </div>
                 )}
 
-                {!selectedProduct.name.toLowerCase().includes('mini') && !selectedProduct.name.toLowerCase().includes('kids') && (
+                {!(selectedProduct.name.toLowerCase().includes('mini') || selectedProduct.name.toLowerCase().includes('kids') || selectedProduct.type?.toLowerCase() === 'minis' || (selectedProduct.tags || []).some(t => t.toLowerCase() === 'minis')) && (
                   <div className="mb-4">
                     <div className="flex justify-between items-end mb-2">
                       <h3 className="text-sm font-bold text-neutral-900 uppercase tracking-wider">Length</h3>
