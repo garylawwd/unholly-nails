@@ -40,6 +40,15 @@ export default function AdminDashboard() {
   
   const [collectionMetadata, setCollectionMetadata] = useState<Record<string, CollectionMeta>>({});
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
+  const [modalState, setModalState] = useState<{ isOpen: boolean; title: string; message: string; isConfirm: boolean; onConfirm?: () => void }>({ isOpen: false, title: "", message: "", isConfirm: false });
+
+  const showModal = (title: string, message: string) => {
+    setModalState({ isOpen: true, title, message, isConfirm: false });
+  };
+
+  const confirmModal = (title: string, message: string, onConfirm: () => void) => {
+    setModalState({ isOpen: true, title, message, isConfirm: true, onConfirm });
+  };
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [savingCollection, setSavingCollection] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -68,7 +77,7 @@ export default function AdminDashboard() {
       const result = await signInWithPopup(auth, provider);
       if (!VALID_ADMINS.includes(result.user.uid)) {
         await signOut(auth);
-        alert(`Access Denied: Your account (${result.user.uid}) does not have administrator privileges.`);
+        showModal("Access Denied", `Your account (${result.user.uid}) does not have administrator privileges.`);
       }
     } catch (err) {
       console.error("Admin login failed:", err);
@@ -161,7 +170,7 @@ export default function AdminDashboard() {
 
     } catch (error) {
       console.error("Error fetching inventory:", error);
-      alert("Error fetching inventory. Check permissions.");
+      showModal("Error", "Error fetching inventory. Check permissions.");
     } finally {
       setLoadingInventory(false);
     }
@@ -209,10 +218,10 @@ export default function AdminDashboard() {
       setInventory(updatedInventory);
       setBulkTagInput("");
       setSelectedIds(new Set());
-      alert(`Tag "${tagToAdd}" added to selected items!`);
+      showModal("Success", `Tag "${tagToAdd}" added to selected items!`);
     } catch (error) {
       console.error(error);
-      alert("Failed to bulk tag.");
+      showModal("Error", "Failed to bulk tag.");
     }
   };
 
@@ -235,7 +244,7 @@ export default function AdminDashboard() {
       setSelectedIds(new Set());
     } catch (error) {
       console.error(error);
-      alert("Failed to update visibility.");
+      showModal("Error", "Failed to update visibility.");
     }
   };
 
@@ -267,11 +276,11 @@ export default function AdminDashboard() {
         if (exists) return prev.map(p => p.id === updatedProduct.id ? updatedProduct : p);
         return [updatedProduct, ...prev];
       });
-      alert("Product saved successfully!");
+      showModal("Success", "Product saved successfully!");
       setEditingProduct(null);
     } catch (err) {
       console.error(err);
-      alert("Failed to save product.");
+      showModal("Error", "Failed to save product.");
     } finally {
       setSavingProduct(false);
     }
@@ -330,10 +339,10 @@ export default function AdminDashboard() {
         setCollectionMetadata(prev => ({ ...prev, [selectedTag]: updatedMeta }));
       }
       
-      alert("Collection settings saved!");
+      showModal("Success", "Collection settings saved!");
     } catch (err) {
       console.error(err);
-      alert("Failed to save collection settings.");
+      showModal("Error", "Failed to save collection settings.");
     } finally {
       setSavingCollection(false);
     }
@@ -578,7 +587,7 @@ export default function AdminDashboard() {
                                   setSelectedTag(null);
                                 } catch(e: any) {
                                   console.error("Delete failed", e);
-                                  alert("Failed to delete page: " + (e.message || "Unknown error"));
+                                  showModal("Delete Failed", "Failed to delete page: " + (e.message || "Unknown error"));
                                 }
                               }
                             }}
@@ -762,7 +771,7 @@ export default function AdminDashboard() {
                       setEditingProduct(null);
                     } catch(err) {
                       console.error(err);
-                      alert("Failed to delete product.");
+                      showModal("Error", "Failed to delete product.");
                     } finally {
                       setSavingProduct(false);
                     }
@@ -840,6 +849,28 @@ export default function AdminDashboard() {
                 />
               </div>
 
+            </div>
+          </div>
+        </div>
+      )}
+
+      {modalState.isOpen && (
+        <div className="fixed inset-0 z-[300] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setModalState(prev => ({ ...prev, isOpen: false }))}></div>
+          <div className="bg-white rounded-3xl w-full max-w-sm overflow-hidden relative shadow-2xl animate-slide-up">
+            <div className="p-6 text-center">
+              <h3 className="font-black uppercase tracking-widest text-lg mb-2">{modalState.title}</h3>
+              <p className="text-neutral-500 text-sm mb-6">{modalState.message}</p>
+              <div className="flex gap-3">
+                {modalState.isConfirm ? (
+                  <>
+                    <button onClick={() => setModalState(prev => ({ ...prev, isOpen: false }))} className="flex-1 py-3 text-sm font-bold text-neutral-500 hover:bg-neutral-100 rounded-xl transition-colors">Cancel</button>
+                    <button onClick={() => { setModalState(prev => ({ ...prev, isOpen: false })); if (modalState.onConfirm) modalState.onConfirm(); }} className="flex-1 py-3 text-sm font-bold text-white bg-black hover:bg-neutral-800 rounded-xl transition-colors">Confirm</button>
+                  </>
+                ) : (
+                  <button onClick={() => setModalState(prev => ({ ...prev, isOpen: false }))} className="flex-1 py-3 text-sm font-bold text-white bg-black hover:bg-neutral-800 rounded-xl transition-colors">OK</button>
+                )}
+              </div>
             </div>
           </div>
         </div>
