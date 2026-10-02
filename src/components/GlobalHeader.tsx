@@ -62,6 +62,9 @@ export default function GlobalHeader() {
         }
       } catch (e) {
         console.error("Failed to fetch ribbon", e);
+        // FATAL FALLBACK: If Firebase blocks the read (e.g. permission denied) or crashes, 
+        // we MUST render a default ribbon so the site doesn't look broken!
+        setRibbonOrder(['home', 'special-offers', 'Sets', 'Keychains', 'Earrings', 'Accessories', 'Basics', 'all']);
       }
     };
     fetchRibbon();
