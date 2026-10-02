@@ -59,7 +59,13 @@ export default function GlobalHeader() {
         }
         
         if (layoutData && layoutData.order && Array.isArray(layoutData.order) && layoutData.order.length > 0) {
-          setRibbonOrder(layoutData.order);
+          const defaultCore = ['home', 'all', 'special-offers', 'Sets', 'Minis', 'Keychains', 'Earrings', 'Accessories', 'Basics'];
+            const validTags = layoutData.order.filter((tag: string) => {
+              if (defaultCore.includes(tag)) return true;
+              const custom = collections.find(c => c.tag === tag);
+              return custom && custom.inRibbon !== false;
+            });
+            setRibbonOrder(validTags);
         } else {
           // Default fallback that INCLUDES custom pages!
           const defaultCore = ['home', 'special-offers', 'Sets', 'Minis', 'Keychains', 'Earrings', 'Accessories', 'Basics'];
@@ -125,7 +131,10 @@ export default function GlobalHeader() {
     if (!['home', 'all', 'Sets', 'Minis', 'Keychains', 'Earrings', 'Accessories', 'Basics'].includes(tagToRemove)) {
       try {
         const vendorUid = process.env.NEXT_PUBLIC_VENDOR_UID || "CMzpkonBxKeLboaVTUYwDWgiwNG3";
-        await setDoc(doc(db, "users", vendorUid, "collection_settings", tagToRemove), { inRibbon: false }, { merge: true });
+        const metaDoc = await getDoc(doc(db, "users", vendorUid, "collection_settings", tagToRemove));
+          if (metaDoc.exists()) {
+            await setDoc(doc(db, "users", vendorUid, "collection_settings", tagToRemove), { inRibbon: false }, { merge: true });
+          }
         setAllCollections(prev => prev.map(c => c.tag === tagToRemove ? { ...c, inRibbon: false } : c));
       } catch(err) {}
     }
