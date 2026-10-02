@@ -323,9 +323,7 @@ export default function AdminDashboard() {
         await setDoc(doc(db, "users", STORE_OWNER_UID, "collection_settings", newSlug), updatedMeta);
         
         // Only delete old one if it wasn't a brand new unsaved page
-        if (selectedTag !== "new-custom-page") {
-           await deleteDoc(doc(db, "users", STORE_OWNER_UID, "collection_settings", selectedTag));
-        }
+        if (selectedTag && selectedTag !== newSlug) { await deleteDoc(doc(db, "users", STORE_OWNER_UID, "collection_settings", selectedTag)); }
         
         setCollectionMetadata(prev => {
           const next = { ...prev };
@@ -572,7 +570,7 @@ export default function AdminDashboard() {
                         <p className="text-xs text-neutral-500 mt-1 truncate">unhollynails.com/collections/{selectedTag.toLowerCase().replace(/\s+/g, '-')}</p>
                       </div>
                       <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-                        {!["all", "special-offers", "sets", "minis", "keychains", "earrings", "accessories", "basics", "new-custom-page"].includes(selectedTag) && (
+                        {!["all", "special-offers", "sets", "minis", "keychains", "earrings", "accessories", "basics"].includes(selectedTag) && (
                           <button 
                             type="button" 
                             onClick={() => {
