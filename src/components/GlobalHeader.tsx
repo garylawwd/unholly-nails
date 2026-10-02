@@ -226,8 +226,8 @@ export default function GlobalHeader() {
     return { title: tag.toUpperCase(), href: `/collections/${tag}` };
   };
 
-  const hiddenCollections = allCollections.filter(c => !ribbonOrder.includes(c.tag) && !coreTags.map(t=>t.toLowerCase()).includes(c.tag.toLowerCase()));
   const coreTags = ['home', 'all', 'special-offers', 'Sets', 'Minis', 'Keychains', 'Earrings', 'Accessories', 'Basics'];
+  const hiddenCollections = allCollections.filter(c => !ribbonOrder.includes(c.tag) && !coreTags.map(t=>t.toLowerCase()).includes(c.tag.toLowerCase()));
   const hiddenCoreTags = coreTags.filter(t => !ribbonOrder.includes(t));
 
   return (
