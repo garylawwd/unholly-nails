@@ -175,6 +175,7 @@ export default function CollectionPage() {
       } else if (tag !== "all") {
         const topLevelMap: Record<string, string> = {
           "sets": "Sets",
+          "minis": "Minis",
           "keychains": "Keychains",
           "keyrings": "Keychains",
           "earrings": "Earrings",
