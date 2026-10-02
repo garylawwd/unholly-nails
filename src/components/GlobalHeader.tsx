@@ -62,13 +62,13 @@ export default function GlobalHeader() {
           setRibbonOrder(layoutData.order);
         } else {
           // Default fallback that INCLUDES custom pages!
-          const defaultCore = ['home', 'special-offers', 'Sets', 'Keychains', 'Earrings', 'Accessories', 'Basics'];
+          const defaultCore = ['home', 'special-offers', 'Sets', 'Minis', 'Keychains', 'Earrings', 'Accessories', 'Basics'];
           const customInRibbon = collections.filter(c => c.inRibbon && !defaultCore.includes(c.tag)).map(c => c.tag);
           setRibbonOrder([...defaultCore, ...customInRibbon, 'all']);
         }
       } catch (e) {
         console.error("Fatal error fetching ribbon", e);
-        setRibbonOrder(['home', 'special-offers', 'Sets', 'Keychains', 'Earrings', 'Accessories', 'Basics', 'all']);
+        setRibbonOrder(['home', 'special-offers', 'Sets', 'Minis', 'Keychains', 'Earrings', 'Accessories', 'Basics', 'all']);
       }
     };
     fetchRibbon();
@@ -122,7 +122,7 @@ export default function GlobalHeader() {
     setRibbonOrder(newOrder);
     await saveRibbonOrder(newOrder);
     
-    if (!['home', 'all', 'Sets', 'Keychains', 'Earrings', 'Accessories', 'Basics'].includes(tagToRemove)) {
+    if (!['home', 'all', 'Sets', 'Minis', 'Keychains', 'Earrings', 'Accessories', 'Basics'].includes(tagToRemove)) {
       try {
         const vendorUid = process.env.NEXT_PUBLIC_VENDOR_UID || "CMzpkonBxKeLboaVTUYwDWgiwNG3";
         await setDoc(doc(db, "users", vendorUid, "collection_settings", tagToRemove), { inRibbon: false }, { merge: true });
@@ -137,7 +137,7 @@ export default function GlobalHeader() {
       const newOrder = [...ribbonOrder, tagToAdd];
       setRibbonOrder(newOrder);
       await saveRibbonOrder(newOrder);
-      if (!['home', 'all', 'Sets', 'Keychains', 'Earrings', 'Accessories', 'Basics'].includes(tagToAdd)) {
+      if (!['home', 'all', 'Sets', 'Minis', 'Keychains', 'Earrings', 'Accessories', 'Basics'].includes(tagToAdd)) {
         try {
           const vendorUid = process.env.NEXT_PUBLIC_VENDOR_UID || "CMzpkonBxKeLboaVTUYwDWgiwNG3";
           await setDoc(doc(db, "users", vendorUid, "collection_settings", tagToAdd), { inRibbon: true }, { merge: true });
@@ -198,7 +198,7 @@ export default function GlobalHeader() {
       const custom = allCollections.find(c => c.tag === 'special-offers');
       return { title: custom?.title || 'SPECIAL OFFERS', href: '/collections/special-offers' };
     }
-    if (['Sets', 'Keychains', 'Earrings', 'Accessories', 'Basics'].includes(tag)) {
+    if (['Sets', 'Minis', 'Keychains', 'Earrings', 'Accessories', 'Basics'].includes(tag)) {
       return { title: tag.toUpperCase(), href: `/collections/${tag}` };
     }
     const custom = allCollections.find(c => c.tag === tag);
@@ -207,7 +207,7 @@ export default function GlobalHeader() {
   };
 
   const hiddenCollections = allCollections.filter(c => !ribbonOrder.includes(c.tag));
-  const coreTags = ['home', 'all', 'special-offers', 'Sets', 'Keychains', 'Earrings', 'Accessories', 'Basics'];
+  const coreTags = ['home', 'all', 'special-offers', 'Sets', 'Minis', 'Keychains', 'Earrings', 'Accessories', 'Basics'];
   const hiddenCoreTags = coreTags.filter(t => !ribbonOrder.includes(t));
 
   return (

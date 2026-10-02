@@ -81,7 +81,7 @@ export default function ItemPickerModal({
 
   const getMappedType = (t: string) => {
     const map: Record<string, string> = {
-      "sets": "Sets", "keychains": "Keychains", "keyrings": "Keychains",
+      "sets": "Sets", "minis": "Minis", "keychains": "Keychains", "keyrings": "Keychains",
       "earrings": "Earrings", "accessories": "Accessories", "basics": "Basics"
     };
     return map[t.toLowerCase()];
@@ -156,7 +156,7 @@ export default function ItemPickerModal({
         {/* Filter Chips (Custom & Promo Collections) */}
         {collectionMode !== 'core' && (
           <div className="px-6 py-4 border-b border-neutral-100 bg-neutral-50 flex gap-2 overflow-x-auto hide-scrollbar">
-            {["All", "Sets", "Keychains", "Earrings", "Accessories", "Basics"].map(f => (
+            {["All", "Sets", "Minis", "Keychains", "Earrings", "Accessories", "Basics"].map(f => (
               <button 
                 key={f}
                 onClick={() => setFilter(f)}

@@ -509,7 +509,7 @@ export default function CollectionPage() {
                     +
                   </div>
                   <span className="font-bold text-pink-600 text-center uppercase tracking-widest text-xs">
-                    {['sets', 'keychains', 'earrings', 'accessories', 'basics', 'special-offers'].includes(tag.toLowerCase()) || tag === 'all' ? 'Publish Unlisted Items' : 'Add Items to Collection'}
+                    {['sets', 'minis', 'keychains', 'earrings', 'accessories', 'basics', 'special-offers'].includes(tag.toLowerCase()) || tag === 'all' ? 'Publish Unlisted Items' : 'Add Items to Collection'}
                   </span>
                 </div>
               )}
@@ -559,7 +559,7 @@ export default function CollectionPage() {
                       const vendorUid = process.env.NEXT_PUBLIC_VENDOR_UID || "CMzpkonBxKeLboaVTUYwDWgiwNG3";
                       
                       // Save to the appropriate array (includedProductIds for custom collections, itemOrder for core tags)
-                      const isCoreTag = ['sets', 'keychains', 'earrings', 'accessories', 'basics', 'special-offers'].includes(tag.toLowerCase()) || tag === 'all';
+                      const isCoreTag = ['sets', 'minis', 'keychains', 'earrings', 'accessories', 'basics', 'special-offers'].includes(tag.toLowerCase()) || tag === 'all';
                       if (!isCoreTag) {
                         await setDoc(doc(db, "users", vendorUid, "collection_settings", tag), { includedProductIds: newOrder }, { merge: true });
                         setCollectionInfo((prev: any) => ({...prev, includedProductIds: newOrder}));
@@ -820,7 +820,7 @@ export default function CollectionPage() {
               <h3 className="font-black uppercase tracking-widest text-lg mb-2">Remove Item?</h3>
               <p className="text-neutral-500 text-sm mb-6">
                 Are you sure you want to remove <span className="font-bold text-black">"{itemToRemove.name}"</span> from this collection?
-                {['sets', 'keychains', 'earrings', 'accessories', 'basics', 'all'].includes(tag.toLowerCase()) && 
+                {['sets', 'minis', 'keychains', 'earrings', 'accessories', 'basics', 'all'].includes(tag.toLowerCase()) && 
                   <span className="block mt-2 text-red-500 font-bold">This will unlist it from the live store completely!</span>
                 }
               </p>
@@ -832,7 +832,7 @@ export default function CollectionPage() {
                     const lowerTag = tag.toLowerCase();
                     
                     try {
-                      if (['sets', 'keychains', 'earrings', 'accessories', 'basics', 'all'].includes(lowerTag)) {
+                      if (['sets', 'minis', 'keychains', 'earrings', 'accessories', 'basics', 'all'].includes(lowerTag)) {
                         await setDoc(doc(db, "users", vendorUid, "nail_sets", itemToRemove.id), { isForSale: false }, { merge: true });
                         setProducts(prev => prev.filter(p => p.id !== itemToRemove.id));
                       } else if (lowerTag === 'special-offers') {
@@ -867,13 +867,13 @@ export default function CollectionPage() {
           tag={tag}
           collectionMode={
             tag.toLowerCase() === 'special-offers' ? 'promo' :
-            ['sets', 'keychains', 'earrings', 'accessories', 'basics', 'all'].includes(tag.toLowerCase()) ? 'core' : 'custom'
+            ['sets', 'minis', 'keychains', 'earrings', 'accessories', 'basics', 'all'].includes(tag.toLowerCase()) ? 'core' : 'custom'
           }
           currentItems={products}
           onSave={async (selectedIds) => {
             const vendorUid = process.env.NEXT_PUBLIC_VENDOR_UID || "CMzpkonBxKeLboaVTUYwDWgiwNG3";
             const mode = tag.toLowerCase() === 'special-offers' ? 'promo' :
-              ['sets', 'keychains', 'earrings', 'accessories', 'basics', 'all'].includes(tag.toLowerCase()) ? 'core' : 'custom';
+              ['sets', 'minis', 'keychains', 'earrings', 'accessories', 'basics', 'all'].includes(tag.toLowerCase()) ? 'core' : 'custom';
             
             try {
               if (mode === 'core') {

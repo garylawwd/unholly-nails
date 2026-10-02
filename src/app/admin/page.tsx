@@ -167,7 +167,7 @@ export default function AdminDashboard() {
   };
 
   const uniqueTags = useMemo(() => {
-    const basePages = ["all", "special-offers", "sets", "keychains", "earrings", "accessories", "basics"];
+    const basePages = ["all", "special-offers", "sets", "minis", "keychains", "earrings", "accessories", "basics"];
     const customPages = Object.keys(collectionMetadata).filter(k => !basePages.includes(k));
     return [...basePages, ...customPages];
   }, [collectionMetadata]);
@@ -434,7 +434,7 @@ export default function AdminDashboard() {
 
             {/* Filter Chips */}
             <div className="flex gap-2 overflow-x-auto pb-4 mb-2 no-scrollbar">
-              {['All', 'Sets', 'Keychains', 'Earrings', 'Accessories', 'Basics'].map(filter => (
+              {['All', 'Sets', 'Minis', 'Keychains', 'Earrings', 'Accessories', 'Basics'].map(filter => (
                 <button
                   key={filter}
                   onClick={() => setInventoryFilter(filter)}
@@ -562,7 +562,7 @@ export default function AdminDashboard() {
                         <p className="text-xs text-neutral-500 mt-1 truncate">unhollynails.com/collections/{selectedTag.toLowerCase().replace(/\s+/g, '-')}</p>
                       </div>
                       <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-                        {!["all", "special-offers", "sets", "keychains", "earrings", "accessories", "basics", "new-custom-page"].includes(selectedTag) && (
+                        {!["all", "special-offers", "sets", "minis", "keychains", "earrings", "accessories", "basics", "new-custom-page"].includes(selectedTag) && (
                           <button 
                             type="button" 
                             onClick={async () => {
@@ -593,7 +593,7 @@ export default function AdminDashboard() {
                     </div>
 
                     <div className="p-4 sm:p-6 space-y-6 overflow-y-auto max-h-[70vh]">
-                      {!["all", "special-offers", "sets", "keychains", "earrings", "accessories", "basics"].includes(selectedTag) && (
+                      {!["all", "special-offers", "sets", "minis", "keychains", "earrings", "accessories", "basics"].includes(selectedTag) && (
                         <div>
                           <label className="block text-xs font-bold text-neutral-500 uppercase mb-2">Page URL Slug</label>
                           <input 
@@ -811,6 +811,7 @@ export default function AdminDashboard() {
                   <label className="block text-xs font-bold text-neutral-500 uppercase mb-2">Category (Type)</label>
                   <select value={editingProduct.type || "Sets"} onChange={e => setEditingProduct({...editingProduct, type: e.target.value})} className="w-full border rounded-xl px-4 py-3 text-sm bg-neutral-50 font-bold">
                     <option value="Sets">Sets</option>
+                    <option value="Minis">Minis</option>
                     <option value="Keychains">Keychains</option>
                     <option value="Earrings">Earrings</option>
                     <option value="Accessories">Accessories</option>

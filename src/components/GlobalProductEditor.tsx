@@ -170,6 +170,7 @@ export default function GlobalProductEditor() {
                 <label className="block text-xs font-bold text-neutral-500 uppercase mb-2">Product Type</label>
                 <select value={editingProduct.type || "Sets"} onChange={e => setEditingProduct({...editingProduct, type: e.target.value})} className="w-full border rounded-xl px-3 py-3 bg-white">
                   <option value="Sets">Sets</option>
+                  <option value="Minis">Minis</option>
                   <option value="Keychains">Keychains</option>
                   <option value="Earrings">Earrings</option>
                   <option value="Accessories">Accessories</option>
