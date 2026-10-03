@@ -737,7 +737,7 @@ export default function AdminDashboard() {
                         <label className="flex items-center gap-3 cursor-pointer p-4 border rounded-xl hover:bg-neutral-50 transition bg-white relative z-10">
                           <input 
                             type="checkbox" 
-                            checked={collectionMetadata[selectedTag]?.inRibbon || false}
+                            checked={collectionMetadata[selectedTag]?.inRibbon !== undefined ? collectionMetadata[selectedTag].inRibbon : ['home', 'all', 'special-offers', 'sets', 'minis', 'keychains', 'earrings', 'accessories', 'basics'].includes(selectedTag.toLowerCase())}
                             onChange={e => setCollectionMetadata(p => ({...p, [selectedTag]: {...(p[selectedTag] || {}), inRibbon: e.target.checked, tag: selectedTag}}))}
                             className="w-5 h-5 accent-pink-500"
                           />

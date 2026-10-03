@@ -72,16 +72,22 @@ export default function GlobalHeader() {
         if (layoutData && layoutData.order && Array.isArray(layoutData.order) && layoutData.order.length > 0) {
           const defaultCore = ['home', 'all', 'special-offers', 'Sets', 'Minis', 'Keychains', 'Earrings', 'Accessories', 'Basics'];
             const validTags = layoutData.order.filter((tag: string) => {
-              if (defaultCore.includes(tag)) return true;
-              const custom = collections.find(c => c.tag === tag);
-              return custom && custom.inRibbon !== false;
+              const collectionMeta = collections.find(c => c.tag.toLowerCase() === tag.toLowerCase());
+              if (defaultCore.includes(tag)) {
+                return !(collectionMeta && collectionMeta.inRibbon === false);
+              }
+              return collectionMeta && collectionMeta.inRibbon !== false;
             });
             setRibbonOrder(validTags);
         } else {
           // Default fallback that INCLUDES custom pages!
           const defaultCore = ['home', 'special-offers', 'Sets', 'Minis', 'Keychains', 'Earrings', 'Accessories', 'Basics'];
-          const customInRibbon = collections.filter(c => c.inRibbon && !defaultCore.includes(c.tag)).map(c => c.tag);
-          setRibbonOrder([...defaultCore, ...customInRibbon, 'all']);
+          const filteredCore = [...defaultCore, 'all'].filter(tag => {
+              const collectionMeta = collections.find(c => c.tag.toLowerCase() === tag.toLowerCase());
+              return !(collectionMeta && collectionMeta.inRibbon === false);
+            });
+            const customInRibbon = collections.filter(c => c.inRibbon && !defaultCore.includes(c.tag)).map(c => c.tag);
+            setRibbonOrder([...filteredCore, ...customInRibbon]);
         }
       } catch (e) {
         console.error("Fatal error fetching ribbon", e);
