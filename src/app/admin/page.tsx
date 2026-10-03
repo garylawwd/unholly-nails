@@ -637,7 +637,7 @@ export default function AdminDashboard() {
                           <label className="block text-xs font-bold text-neutral-500 uppercase mb-2">Page URL Slug</label>
                           <input 
                             type="text" 
-                            value={collectionMetadata[selectedTag]?.tag || selectedTag} 
+                            value={collectionMetadata[selectedTag]?.tag ?? selectedTag} 
                             onChange={e => setCollectionMetadata(p => ({...p, [selectedTag]: {...(p[selectedTag] || {}), tag: e.target.value.toLowerCase().replace(/\s+/g, '-')}}))}
                             className="w-full border rounded-xl px-4 py-3 font-medium text-sm bg-neutral-50"
                             placeholder="e.g. winter-collection"
@@ -649,7 +649,7 @@ export default function AdminDashboard() {
                         <label className="block text-xs font-bold text-neutral-500 uppercase mb-2">Display Title</label>
                         <input 
                           type="text" 
-                          value={collectionMetadata[selectedTag]?.title || selectedTag} 
+                          value={collectionMetadata[selectedTag]?.title ?? selectedTag} 
                           onChange={e => setCollectionMetadata(p => ({...p, [selectedTag]: {...(p[selectedTag] || {}), title: e.target.value, tag: selectedTag}}))}
                           className="w-full border rounded-xl px-4 py-3 font-bold text-lg"
                         />
