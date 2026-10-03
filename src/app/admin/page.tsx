@@ -367,15 +367,35 @@ export default function AdminDashboard() {
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-neutral-50 text-neutral-900 font-sans">
       {/* Mobile Top Nav */}
-      <div className="md:hidden flex items-center justify-between p-4 bg-white border-b sticky top-0 z-50 shadow-sm">
-        <h1 className="font-black text-lg tracking-tight">UnHolly Admin</h1>
-        <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="p-2 -mr-2 text-neutral-500 hover:text-black">
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" /></svg>
-        </button>
-      </div>
+      <div className="md:hidden flex flex-col bg-white border-b sticky top-0 z-50 shadow-sm w-full">
+          <div className="flex items-center justify-between p-3 border-b">
+            <h1 className="font-black tracking-tight text-lg">UnHolly Admin</h1>
+            <button onClick={() => signOut(auth)} className="text-xs font-bold text-red-500 bg-red-50 px-3 py-1.5 rounded-full border border-red-100 active:scale-95 transition-transform">Logout</button>
+          </div>
+          <div className="flex p-2 gap-2 bg-neutral-100">
+            <a 
+              href="/"
+              className="flex-1 py-2 text-center text-xs font-bold rounded-lg bg-white text-neutral-600 shadow-sm border border-neutral-200 active:scale-95 transition-transform"
+            >
+              Storefront
+            </a>
+            <button 
+              onClick={() => setActiveTab("inventory")}
+              className={`flex-1 py-2 text-xs font-bold rounded-lg active:scale-95 transition-all ${activeTab === "inventory" ? "bg-black text-white shadow-md ring-2 ring-black ring-offset-2 ring-offset-neutral-100" : "bg-white text-neutral-600 shadow-sm border border-neutral-200"}`}
+            >
+              Inventory
+            </button>
+            <button 
+              onClick={() => setActiveTab("collections")}
+              className={`flex-1 py-2 text-xs font-bold rounded-lg active:scale-95 transition-all ${activeTab === "collections" ? "bg-black text-white shadow-md ring-2 ring-black ring-offset-2 ring-offset-neutral-100" : "bg-white text-neutral-600 shadow-sm border border-neutral-200"}`}
+            >
+              Collections
+            </button>
+          </div>
+        </div>
 
       {/* Sidebar */}
-      <aside className={`${mobileMenuOpen ? 'flex absolute inset-0 z-40 bg-white flex-col mt-16 h-[calc(100vh-64px)]' : 'hidden'} md:flex w-full md:w-64 md:bg-white md:border-r md:h-screen md:sticky md:top-0 flex-col`}>
+      <aside className="hidden md:flex w-64 bg-white border-r h-screen sticky top-0 flex-col">
         <div className="hidden md:block p-6 border-b">
           <h1 className="font-black text-xl tracking-tight">UnHolly Admin</h1>
           <p className="text-xs text-neutral-500 mt-1">{user.email}</p>
@@ -406,7 +426,7 @@ export default function AdminDashboard() {
       </aside>
 
       {/* Main Content */}
-      <main className={`flex-1 overflow-y-auto ${mobileMenuOpen ? 'hidden md:block' : 'block'}`}>
+      <main className="flex-1 overflow-y-auto block">
         
         {/* INVENTORY TAB */}
         {activeTab === "inventory" && (
