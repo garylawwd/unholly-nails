@@ -88,7 +88,7 @@ export default function Home() {
       }
       
       // Fetch Ribbon Collections
-      const ribbonSnap = await getDocs(query(collection(db, "users", vendorUid, "collection_settings"), where("inRibbon", "==", true)));
+      const ribbonSnap = await getDocs(query(collection(db, "users", vendorUid, "collection_settings"), where("isFeatured", "==", true)));
       const ribbons = ribbonSnap.docs.map(d => ({ 
         tag: d.data().tag, 
         title: d.data().title || d.data().tag,

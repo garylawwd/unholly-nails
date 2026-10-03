@@ -340,9 +340,9 @@ export default function CollectionPage() {
 
 
         <div className="pt-16 pb-6 sm:pt-28 sm:pb-12 text-center px-4 relative mt-4">
-          {adminUser && (
-            <button 
-              onClick={openInlineEditor}
+          {adminUser && editMode && (
+              <button 
+                onClick={openInlineEditor}
               className={`absolute top-4 right-6 sm:top-12 sm:right-8 bg-black/70 text-white p-3 rounded-full hover:bg-black transition-all shadow-lg z-30 group ${editMode ? 'ring-2 ring-pink-500 animate-pulse' : ''}`}
               title="Theme Collection"
             >
@@ -373,13 +373,13 @@ export default function CollectionPage() {
                 </h1>
               )}
               {editMode && (
-                <div className="absolute -right-2 sm:-right-12 top-1/2 -translate-y-1/2 flex items-center justify-center bg-white rounded-full p-1 shadow-lg opacity-100 transition-opacity">
+                <div className="absolute -right-2 sm:-right-14 top-0 sm:top-1/2 sm:-translate-y-1/2 flex items-center justify-center bg-white rounded-full p-2 shadow-xl opacity-100 transition-opacity z-[60]">
                   <input type="color" value={collectionInfo?.headerColor || '#ffffff'} onChange={async (e) => {
                     setCollectionInfo((prev: any) => ({...prev, headerColor: e.target.value}));
                     if(!adminUser) return;
                     const vendorUid = process.env.NEXT_PUBLIC_VENDOR_UID || "CMzpkonBxKeLboaVTUYwDWgiwNG3";
                     await setDoc(doc(db, "users", vendorUid, "collection_settings", tag), { headerColor: e.target.value }, { merge: true });
-                  }} className="w-6 h-6 rounded cursor-pointer border-0 p-0" title="Title Color" />
+                  }} className="w-8 h-8 rounded cursor-pointer border-0 p-0" title="Title Color" />
                 </div>
               )}
             </div>
@@ -407,13 +407,13 @@ export default function CollectionPage() {
                   >{collectionInfo?.description}</p>
                 )}
                 {editMode && (
-                  <div className="absolute -right-2 sm:-right-12 top-1/2 -translate-y-1/2 flex items-center justify-center bg-white rounded-full p-1 shadow-lg opacity-100 transition-opacity">
+                  <div className="absolute -right-2 sm:-right-14 top-0 sm:top-1/2 sm:-translate-y-1/2 flex items-center justify-center bg-white rounded-full p-2 shadow-xl opacity-100 transition-opacity z-[60]">
                     <input type="color" value={collectionInfo?.descriptionColor || '#e5e5e5'} onChange={async (e) => {
                       setCollectionInfo((prev: any) => ({...prev, descriptionColor: e.target.value}));
                       if(!adminUser) return;
                       const vendorUid = process.env.NEXT_PUBLIC_VENDOR_UID || "CMzpkonBxKeLboaVTUYwDWgiwNG3";
                       await setDoc(doc(db, "users", vendorUid, "collection_settings", tag), { descriptionColor: e.target.value }, { merge: true });
-                    }} className="w-6 h-6 rounded cursor-pointer border-0 p-0" title="Description Color" />
+                    }} className="w-8 h-8 rounded cursor-pointer border-0 p-0" title="Description Color" />
                   </div>
                 )}
               </div>

@@ -14,6 +14,7 @@ interface CollectionMeta {
   description: string;
   backgroundImageUrl: string;
   inRibbon?: boolean;
+    isFeatured?: boolean;
   headerColor?: string;
   descriptionColor?: string;
   ombreStart?: string;
@@ -298,6 +299,7 @@ export default function AdminDashboard() {
         description: "", 
         backgroundImageUrl: "", 
         inRibbon: false,
+          isFeatured: false,
         headerColor: "#ffffff",
         headerBgColor: "#ffffff",
         descriptionColor: "#e5e5e5",
@@ -634,8 +636,9 @@ export default function AdminDashboard() {
                         />
                       </div>
 
-                      <div className="mb-6">
-                        <label className="block text-xs font-bold text-neutral-500 uppercase mb-2">Included Products</label>
+                      {!["all", "special-offers", "sets", "minis", "keychains", "earrings", "accessories", "basics"].includes(selectedTag) && (
+                        <div className="mb-6">
+                          <label className="block text-xs font-bold text-neutral-500 uppercase mb-2">Included Products</label>
                         <div className="h-64 overflow-y-auto border rounded-xl p-2 bg-white flex flex-col gap-1 shadow-inner">
                           {inventory.map(item => (
                             <label key={item.id} className="flex items-center gap-3 p-2 hover:bg-neutral-50 rounded-lg cursor-pointer transition">
@@ -740,8 +743,21 @@ export default function AdminDashboard() {
                           <div>
                             <span className="font-bold block">Show in Storefront Ribbon Menu</span>
                             <span className="text-xs text-neutral-500">Pin this collection to the top navigation ribbon on the main website.</span>
-                          </div>
-                        </label>
+                            </div>
+                          </label>
+
+                          <label className="flex items-center gap-3 cursor-pointer p-4 border rounded-xl hover:bg-neutral-50 transition bg-white relative z-10">
+                            <input 
+                              type="checkbox" 
+                              checked={collectionMetadata[selectedTag]?.isFeatured || false}
+                              onChange={e => setCollectionMetadata(p => ({...p, [selectedTag]: {...(p[selectedTag] || {}), isFeatured: e.target.checked, tag: selectedTag}}))}
+                              className="w-5 h-5 accent-pink-500"
+                            />
+                            <div>
+                              <span className="font-bold block">Show in Featured Collections (Home Page)</span>
+                              <span className="text-xs text-neutral-500">Display this collection as a featured card on the Home Page.</span>
+                            </div>
+                          </label>
                       </div>
 
                     </div>
