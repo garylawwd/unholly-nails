@@ -549,7 +549,7 @@ export default function AdminDashboard() {
             <div className="flex flex-col lg:flex-row gap-8 items-start">
               <div className="w-full lg:w-1/3 bg-white border rounded-2xl p-4 shadow-sm">
                 <h3 className="font-bold mb-4 px-2 text-neutral-500 text-xs uppercase tracking-wider">Your Pages</h3>
-                <div className="space-y-1 mb-4 max-h-[40vh] lg:max-h-none overflow-y-auto">
+                <div className="space-y-1 mb-4">
                   {uniqueTags.map(tag => {
                     const displayName = tag.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
                     return (
@@ -622,7 +622,7 @@ export default function AdminDashboard() {
                       </div>
                     </div>
 
-                    <div className="p-4 sm:p-6 space-y-6 overflow-y-auto max-h-[70vh]">
+                    <div className="p-4 sm:p-6 space-y-6">
                       {!["all", "special-offers", "sets", "minis", "keychains", "earrings", "accessories", "basics"].includes(selectedTag) && (
                         <div>
                           <label className="block text-xs font-bold text-neutral-500 uppercase mb-2">Page URL Slug</label>
