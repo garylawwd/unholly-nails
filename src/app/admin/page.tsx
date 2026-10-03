@@ -663,6 +663,7 @@ export default function AdminDashboard() {
                         </div>
                         <p className="text-xs text-neutral-400 mt-2">If no items are selected, this page will automatically pull products tagged with exactly "{selectedTag}". If you select specific items here, it will ONLY pull the selected items.</p>
                       </div>
+                      )}
 
                       <div className="grid grid-cols-2 gap-4">
                         <div>
@@ -745,7 +746,6 @@ export default function AdminDashboard() {
                             <span className="text-xs text-neutral-500">Pin this collection to the top navigation ribbon on the main website.</span>
                             </div>
                           </label>
-
                           <label className="flex items-center gap-3 cursor-pointer p-4 border rounded-xl hover:bg-neutral-50 transition bg-white relative z-10">
                             <input 
                               type="checkbox" 
