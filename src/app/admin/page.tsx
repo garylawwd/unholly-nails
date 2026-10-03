@@ -479,17 +479,24 @@ export default function AdminDashboard() {
 
             {/* Bulk Action Bar */}
             {selectedIds.size > 0 && (
-              <div className="bg-pink-100 border border-pink-200 rounded-2xl p-4 mb-6 flex items-center gap-4 sticky top-4 z-10 shadow-lg shadow-pink-100/50">
-                <span className="font-bold text-pink-800 bg-pink-200 px-3 py-1 rounded-full text-sm">{selectedIds.size} selected</span>
+              <div className="bg-pink-50 border border-pink-200 rounded-2xl p-3 md:p-4 mb-6 flex flex-col md:flex-row items-stretch md:items-center gap-3 md:gap-4 sticky top-4 z-10 shadow-lg shadow-pink-100/50">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-pink-800 bg-pink-200 px-3 py-1 rounded-full text-xs md:text-sm whitespace-nowrap">{selectedIds.size} selected</span>
+                  {/* Mobile Bulk Actions */}
+                  <div className="flex sm:hidden items-center gap-2">
+                    <button onClick={() => handleBulkToggleVisibility(true)} className="bg-green-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition">Live</button>
+                    <button onClick={() => handleBulkToggleVisibility(false)} className="bg-neutral-800 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition">Hide</button>
+                  </div>
+                </div>
                 
-                <div className="flex bg-white rounded-lg p-1 border ml-auto shadow-sm">
-                  <input type="text" value={bulkTagInput} onChange={e => setBulkTagInput(e.target.value)} placeholder="e.g. Halloween" className="px-3 text-sm outline-none" />
-                  <button onClick={handleBulkAddTag} className="bg-black text-white px-4 py-1.5 rounded text-sm font-bold">Add Tag</button>
+                <div className="flex bg-white rounded-lg p-1 border shadow-sm w-full md:w-auto md:ml-auto">
+                  <input type="text" value={bulkTagInput} onChange={e => setBulkTagInput(e.target.value)} placeholder="e.g. Halloween" className="px-3 py-1 text-sm outline-none w-full min-w-0" />
+                  <button onClick={handleBulkAddTag} className="bg-black text-white px-4 py-1.5 rounded text-sm font-bold shrink-0">Add Tag</button>
                 </div>
 
                 <div className="h-6 w-px bg-pink-300 mx-2 hidden sm:block"></div>
                 
-                <div className="hidden sm:flex items-center gap-4">
+                <div className="hidden sm:flex items-center gap-3">
                   <button onClick={() => handleBulkToggleVisibility(true)} className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-bold transition">Publish to Store</button>
                   <button onClick={() => handleBulkToggleVisibility(false)} className="bg-neutral-800 hover:bg-black text-white px-4 py-2 rounded-lg text-sm font-bold transition">Hide from Store</button>
                 </div>
