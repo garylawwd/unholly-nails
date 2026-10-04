@@ -837,11 +837,11 @@ export default function Home() {
                 <button onClick={() => setShowFeaturePicker(false)} className="text-neutral-400 hover:text-black text-2xl font-bold leading-none">&times;</button>
               </div>
               <div className="p-4 overflow-y-auto flex-1 bg-neutral-50">
-                {allCollections.filter(c => !c.isFeatured).length === 0 ? (
+                {allCollections.filter(c => !c.isFeatured && c.tag !== '--ribbon_layout--').length === 0 ? (
                   <div className="text-center p-8 text-neutral-400 font-medium">All available collections are already featured.</div>
                 ) : (
                   <div className="space-y-2">
-                    {allCollections.filter(c => !c.isFeatured).map(c => (
+                    {allCollections.filter(c => !c.isFeatured && c.tag !== '--ribbon_layout--').map(c => (
                       <button
                         key={c.tag}
                         onClick={async () => {
