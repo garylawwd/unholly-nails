@@ -557,68 +557,77 @@ export default function Home() {
                       </div>
                       
                       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 sm:gap-6">
-                        {editMode ? (
-                          Array.from({ length: 10 }).map((_, i) => {
-                            const prodId = homeContent.featuredProductIds?.[i];
-                            const product = prodId ? products.find(p => p.id === prodId) : null;
-                            if (product) {
-                              return (
-                                <div key={i} className="bg-white/60 backdrop-blur-md rounded-3xl p-4 shadow-sm border border-pink-500 ring-2 ring-pink-500/20 flex flex-col relative group">
-                                  <div className="absolute top-2 right-2 flex gap-1 z-30 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <button onClick={() => setPickerSlotIndex(i)} className="bg-black text-white p-2 rounded-full hover:bg-neutral-800 shadow-md" title="Swap Design"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3 h-3"><path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" /></svg></button>
-                                    <button onClick={async () => {
-                                      const vendorUid = process.env.NEXT_PUBLIC_VENDOR_UID || "CMzpkonBxKeLboaVTUYwDWgiwNG3";
-                                      const newIds = [...(homeContent.featuredProductIds || [])];
-                                      newIds[i] = "";
-                                      setHomeContent(prev => ({...prev, featuredProductIds: newIds}));
-                                      await setDoc(doc(db, "users", vendorUid, "store_settings", "home_content"), { featuredProductIds: newIds }, { merge: true });
-                                    }} className="bg-red-500 text-white p-2 rounded-full hover:bg-red-600 shadow-md" title="Remove"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3 h-3"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></button>
+                        {(() => {
+                          let actualIds = (homeContent.featuredProductIds && homeContent.featuredProductIds.length > 0)
+                            ? [...homeContent.featuredProductIds]
+                            : products.slice(0, 10).map(p => p.id);
+                          
+                          if (editMode) {
+                            while(actualIds.length < 10) actualIds.push("");
+                          }
+
+                          if (editMode) {
+                            return actualIds.slice(0, 10).map((prodId, i) => {
+                              const product = prodId ? products.find(p => p.id === prodId) : null;
+                              if (product) {
+                                return (
+                                  <div key={`slot-${i}`} className="bg-white/60 backdrop-blur-md rounded-3xl p-4 shadow-sm border border-pink-500 ring-2 ring-pink-500/20 flex flex-col relative group">
+                                    <div className="absolute top-2 right-2 flex gap-1 z-30 opacity-0 group-hover:opacity-100 transition-opacity">
+                                      <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); setPickerSlotIndex(i); }} className="bg-black text-white p-2 rounded-full hover:bg-neutral-800 shadow-md" title="Swap Design"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3 h-3"><path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" /></svg></button>
+                                      <button onClick={async (e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        const vendorUid = process.env.NEXT_PUBLIC_VENDOR_UID || "CMzpkonBxKeLboaVTUYwDWgiwNG3";
+                                        const newIds = [...actualIds];
+                                        newIds[i] = "";
+                                        setHomeContent(prev => ({...prev, featuredProductIds: newIds}));
+                                        await setDoc(doc(db, "users", vendorUid, "store_settings", "home_content"), { featuredProductIds: newIds }, { merge: true });
+                                      }} className="bg-red-500 text-white p-2 rounded-full hover:bg-red-600 shadow-md" title="Remove"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3 h-3"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></button>
+                                    </div>
+                                    <div className="relative aspect-square overflow-hidden rounded-2xl bg-pink-50 mb-3 cursor-pointer" onClick={() => setEditingProduct(product)}>
+                                      <Image src={product.imagePath} alt={product.name} fill className="object-cover" sizes="(max-width: 640px) 50vw, 20vw" />
+                                      <div className="absolute inset-0 bg-black/40 opacity-0 hover:opacity-100 flex items-center justify-center transition-opacity text-white font-bold text-xs uppercase tracking-widest backdrop-blur-sm">Edit Data</div>
+                                    </div>
+                                    <div className="flex flex-col flex-grow px-1 text-center">
+                                      <h3 className="text-sm font-black text-neutral-900 truncate mb-0.5">{product.name}</h3>
+                                      <p className="font-bold text-xs text-neutral-500">{product.priceOnAsk ? "POA" : `\u20AC${product.basePrice.toFixed(2)}`}</p>
+                                    </div>
                                   </div>
-                                  <div className="relative aspect-square overflow-hidden rounded-2xl bg-pink-50 mb-3 cursor-pointer" onClick={() => setEditingProduct(product)}>
-                                    <Image src={product.imagePath} alt={product.name} fill className="object-cover" sizes="(max-width: 640px) 50vw, 20vw" />
-                                    <div className="absolute inset-0 bg-black/40 opacity-0 hover:opacity-100 flex items-center justify-center transition-opacity text-white font-bold text-xs uppercase tracking-widest backdrop-blur-sm">Edit Data</div>
+                                );
+                              } else {
+                                return (
+                                  <div key={`slot-${i}`} onClick={(e) => { e.preventDefault(); e.stopPropagation(); setPickerSlotIndex(i); }} className="border-2 border-dashed border-pink-300 flex flex-col items-center justify-center cursor-pointer h-full min-h-[220px] rounded-3xl bg-pink-50/50 hover:bg-pink-100 transition shadow-sm hover:shadow-md group">
+                                    <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform mb-3">
+                                      <span className="text-2xl text-pink-500 font-light">+</span>
+                                    </div>
+                                    <span className="text-pink-500 font-bold text-[10px] uppercase tracking-widest text-center px-4">Select<br/>Design</span>
                                   </div>
-                                  <div className="flex flex-col flex-grow px-1 text-center">
-                                    <h3 className="text-sm font-black text-neutral-900 truncate mb-0.5">{product.name}</h3>
-                                    <p className="font-bold text-xs text-neutral-500">{product.priceOnAsk ? "POA" : `\u20AC${product.basePrice.toFixed(2)}`}</p>
+                                );
+                              }
+                            });
+                          } else {
+                            const displayProducts = actualIds.map(id => products.find(p => p.id === id)).filter(Boolean);
+                            return displayProducts.map((product: any) => (
+                              <div key={product.id} className="bg-white/60 backdrop-blur-md rounded-3xl p-4 shadow-sm border border-pink-100/50 flex flex-col group relative transform transition-all duration-300 hover:-translate-y-2 hover:shadow-xl">
+                                {product.isPromo && (
+                                  <div className="absolute top-5 left-5 bg-[#FF5C9D] text-white text-[9px] font-bold px-3 py-1.5 rounded-full z-10 shadow-sm uppercase tracking-widest">PROMO</div>
+                                )}
+                                <div className="relative aspect-square overflow-hidden rounded-2xl bg-pink-50 cursor-pointer mb-5" onClick={() => openDrawer(product)}>
+                                  <Image src={product.imagePath} alt={product.name} fill className="object-cover transition-transform duration-700 ease-out group-hover:scale-110" sizes="(max-width: 640px) 50vw, 20vw" />
+                                </div>
+                                <div className="flex flex-col flex-grow px-1">
+                                  <h3 className="text-base font-black text-neutral-900 truncate mb-1">{product.name}</h3>
+                                  <p className={`font-bold text-sm mb-4 ${product.priceOnAsk ? 'text-[#FF5C9D]' : 'text-neutral-500'}`}>
+                                    {product.priceOnAsk ? "Price on Ask" : `\u20AC${product.basePrice.toFixed(2)}`}
+                                  </p>
+                                  <div className="mt-auto">
+                                    <button onClick={() => openDrawer(product)} className="w-full bg-white text-black px-4 py-3 rounded-xl text-[10px] font-black transition-colors hover:bg-black hover:text-white uppercase tracking-widest border border-pink-100">Select Options</button>
                                   </div>
                                 </div>
-                              );
-                            } else {
-                              return (
-                                <div key={i} onClick={() => setPickerSlotIndex(i)} className="border-2 border-dashed border-pink-300 flex flex-col items-center justify-center cursor-pointer h-full min-h-[220px] rounded-3xl bg-pink-50/50 hover:bg-pink-100 transition shadow-sm hover:shadow-md group">
-                                  <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform mb-3">
-                                    <span className="text-2xl text-pink-500 font-light">+</span>
-                                  </div>
-                                  <span className="text-pink-500 font-bold text-[10px] uppercase tracking-widest text-center px-4">Select<br/>Design</span>
-                                </div>
-                              );
-                            }
-                          })
-                        ) : (
-                          (homeContent.featuredProductIds && homeContent.featuredProductIds.length > 0 
-                            ? homeContent.featuredProductIds.map(id => products.find(p => p.id === id)).filter(Boolean)
-                            : products.slice(0, 10)
-                          ).map((product: any) => (
-                            <div key={product.id} className="bg-white/60 backdrop-blur-md rounded-3xl p-4 shadow-sm border border-pink-100/50 flex flex-col group relative transform transition-all duration-300 hover:-translate-y-2 hover:shadow-xl">
-                              {product.isPromo && (
-                                <div className="absolute top-5 left-5 bg-[#FF5C9D] text-white text-[9px] font-bold px-3 py-1.5 rounded-full z-10 shadow-sm uppercase tracking-widest">PROMO</div>
-                              )}
-                              <div className="relative aspect-square overflow-hidden rounded-2xl bg-pink-50 cursor-pointer mb-5" onClick={() => openDrawer(product)}>
-                                <Image src={product.imagePath} alt={product.name} fill className="object-cover transition-transform duration-700 ease-out group-hover:scale-110" sizes="(max-width: 640px) 50vw, 20vw" />
                               </div>
-                              <div className="flex flex-col flex-grow px-1">
-                                <h3 className="text-base font-black text-neutral-900 truncate mb-1">{product.name}</h3>
-                                <p className={`font-bold text-sm mb-4 ${product.priceOnAsk ? 'text-[#FF5C9D]' : 'text-neutral-500'}`}>
-                                  {product.priceOnAsk ? "Price on Ask" : `\u20AC${product.basePrice.toFixed(2)}`}
-                                </p>
-                                <div className="mt-auto">
-                                  <button onClick={() => openDrawer(product)} className="w-full bg-white text-black px-4 py-3 rounded-xl text-[10px] font-black transition-colors hover:bg-black hover:text-white uppercase tracking-widest border border-pink-100">Select Options</button>
-                                </div>
-                              </div>
-                            </div>
-                          ))
-                        )}
+                            ));
+                          }
+                        })()}
                       </div>
                       
                       <div className="mt-16 flex justify-center z-30 relative">
@@ -774,7 +783,191 @@ export default function Home() {
           </div>
         </div>
       )}
-    </div>
+    
+
+        {/* Collection Feature Picker Modal */}
+        {showFeaturePicker && (
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowFeaturePicker(false)} />
+            <div className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden text-black animate-slide-up flex flex-col max-h-[80vh]">
+              <div className="bg-white border-b px-6 py-4 flex items-center justify-between z-10">
+                <h2 className="font-black text-lg uppercase tracking-wider">Feature Collection</h2>
+                <button onClick={() => setShowFeaturePicker(false)} className="text-neutral-400 hover:text-black text-xl font-bold">�</button>
+              </div>
+              <div className="p-4 overflow-y-auto flex-1 bg-neutral-50">
+                {allCollections.filter(c => !c.isFeatured).length === 0 ? (
+                  <div className="text-center p-8 text-neutral-400 font-medium">All available collections are already featured.</div>
+                ) : (
+                  <div className="space-y-2">
+                    {allCollections.filter(c => !c.isFeatured).map(c => (
+                      <button
+                        key={c.tag}
+                        onClick={async () => {
+                          const vendorUid = process.env.NEXT_PUBLIC_VENDOR_UID || "CMzpkonBxKeLboaVTUYwDWgiwNG3";
+                          await setDoc(doc(db, 'users', vendorUid, 'collection_settings', c.tag), { isFeatured: true }, { merge: true });
+                          const updated = { ...c, isFeatured: true };
+                          setRibbonCollections((prev: any) => [...prev, updated]);
+                          setAllCollections((prev: any) => prev.map((item: any) => item.tag === c.tag ? updated : item));
+                          setShowFeaturePicker(false);
+                        }}
+                        className="w-full text-left p-4 bg-white border rounded-xl hover:border-pink-300 hover:bg-pink-50 transition-colors flex items-center justify-between group"
+                      >
+                        <div>
+                          <h3 className="font-bold text-lg">{c.title || c.tag}</h3>
+                          {c.description && <p className="text-xs text-neutral-500 line-clamp-1">{c.description}</p>}
+                        </div>
+                        <span className="text-pink-500 font-bold opacity-0 group-hover:opacity-100 transition-opacity">Add +</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Collection Inline Theme Editor Modal */}
+        {showEditor && editData && (
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowEditor(false)} />
+            <div className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden text-black animate-slide-up flex flex-col max-h-[90vh]">
+              <div className="bg-white border-b px-6 py-4 flex items-center justify-between z-10 shrink-0">
+                <h2 className="font-black text-lg uppercase tracking-wider">Edit Theme</h2>
+                <button onClick={() => setShowEditor(false)} className="text-neutral-400 hover:text-black text-xl font-bold">�</button>
+              </div>
+              <div className="p-6 space-y-6 overflow-y-auto flex-1">
+                
+                {/* Title and Description */}
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold text-neutral-500 uppercase mb-2">Display Title</label>
+                    <input type="text" value={editData.title || ''} onChange={e => setEditData((p: any) => ({ ...p, title: e.target.value }))} className="w-full border-2 border-neutral-200 rounded-xl px-4 py-3 text-sm focus:border-pink-500 focus:outline-none" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-neutral-500 uppercase mb-2">Description</label>
+                    <textarea value={editData.description || ''} onChange={e => setEditData((p: any) => ({ ...p, description: e.target.value }))} rows={2} className="w-full border-2 border-neutral-200 rounded-xl px-4 py-3 text-sm focus:border-pink-500 focus:outline-none resize-none" />
+                  </div>
+                </div>
+
+                {/* Ombre Gradient */}
+                <div>
+                  <label className="block text-xs font-bold text-neutral-500 uppercase mb-2">Background Gradient</label>
+                  <div className="flex items-center gap-3 bg-neutral-50 p-4 rounded-2xl border">
+                    <input type="color" value={editData.ombreStart || '#f472b6'} onChange={e => setEditData((p: any) => ({ ...p, ombreStart: e.target.value }))} className="w-10 h-10 rounded cursor-pointer border-0 p-0" />
+                    <div className="flex-1 h-8 rounded-lg shadow-inner" style={{ background: `linear-gradient(to right, ${editData.ombreStart || '#f472b6'}, ${editData.ombreEnd || '#000000'})` }}></div>
+                    <input type="color" value={editData.ombreEnd || '#000000'} onChange={e => setEditData((p: any) => ({ ...p, ombreEnd: e.target.value }))} className="w-10 h-10 rounded cursor-pointer border-0 p-0" />
+                  </div>
+                </div>
+
+                {/* Splashback Image */}
+                <div>
+                  <label className="block text-xs font-bold text-neutral-500 uppercase mb-2">Collection Page Splashback</label>
+                  <div className="border-2 border-dashed rounded-2xl p-4 bg-neutral-50 space-y-3">
+                    {editData.backgroundImageUrl && (
+                      <>
+                        <div className="relative w-full h-24 rounded-xl overflow-hidden shadow-sm">
+                          <Image src={editData.backgroundImageUrl} alt="Splashback" fill className="object-cover" />
+                        </div>
+                        <button onClick={(e) => { e.preventDefault(); setEditData((p: any) => ({ ...p, backgroundImageUrl: "" })); if(bgFileRef.current) bgFileRef.current.value = ""; }} className="text-red-500 text-xs font-bold mt-1 block">Remove Image</button>
+                      </>
+                    )}
+                    <input type="file" ref={bgFileRef} accept="image/*" className="text-sm w-full font-medium file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-pink-50 file:text-pink-700 hover:file:bg-pink-100" />
+                    <div>
+                      <label className="block text-xs font-bold text-neutral-500 mb-1">Scale: {editData.bgScale || 100}%</label>
+                      <input type="range" min="10" max="300" value={editData.bgScale || 100} onChange={e => setEditData((p: any) => ({ ...p, bgScale: parseInt(e.target.value) }))} className="w-full accent-pink-500" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Card Image */}
+                <div>
+                  <label className="block text-xs font-bold text-neutral-500 uppercase mb-2">Home Page Card Image</label>
+                  <div className="border-2 border-dashed rounded-2xl p-4 bg-neutral-50 space-y-3">
+                    {editData.cardImageUrl && (
+                      <>
+                        <div className="relative w-full h-24 rounded-xl overflow-hidden shadow-sm">
+                          <Image src={editData.cardImageUrl} alt="Card" fill className="object-contain" />
+                        </div>
+                        <button onClick={(e) => { e.preventDefault(); setEditData((p: any) => ({ ...p, cardImageUrl: "" })); if(cardBgFileRef.current) cardBgFileRef.current.value = ""; }} className="text-red-500 text-xs font-bold mt-1 block">Remove Image</button>
+                      </>
+                    )}
+                    <input type="file" ref={cardBgFileRef} accept="image/*" className="text-sm w-full font-medium file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-pink-50 file:text-pink-700 hover:file:bg-pink-100" />
+                    <div>
+                      <label className="block text-xs font-bold text-neutral-500 mb-1">Scale: {editData.cardBgScale || editData.bgScale || 100}%</label>
+                      <input type="range" min="10" max="300" value={editData.cardBgScale || editData.bgScale || 100} onChange={e => setEditData((p: any) => ({ ...p, cardBgScale: parseInt(e.target.value) }))} className="w-full accent-pink-500" />
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Remove from Featured */}
+                <div className="pt-4 border-t border-neutral-100">
+                  <button
+                    onClick={async () => {
+                      const vendorUid = process.env.NEXT_PUBLIC_VENDOR_UID || "CMzpkonBxKeLboaVTUYwDWgiwNG3";
+                      await setDoc(doc(db, 'users', vendorUid, 'collection_settings', editData.tag), { isFeatured: false }, { merge: true });
+                      setRibbonCollections((prev: any) => prev.filter((c: any) => c.tag !== editData.tag));
+                      setAllCollections((prev: any) => prev.map((c: any) => c.tag === editData.tag ? { ...c, isFeatured: false } : c));
+                      setShowEditor(false);
+                    }}
+                    className="w-full py-3 text-red-500 font-bold hover:bg-red-50 rounded-xl transition-colors text-sm"
+                  >
+                    Remove from Featured Collections
+                  </button>
+                </div>
+              </div>
+
+              {/* Save Button */}
+              <div className="shrink-0 bg-white border-t p-4">
+                <button onClick={saveInlineEdits} disabled={savingEdit} className="w-full bg-black text-white py-4 rounded-xl font-black text-sm uppercase tracking-widest hover:bg-neutral-800 disabled:opacity-50 transition-colors">
+                  {savingEdit ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Product Slot Picker Modal */}
+        {pickerSlotIndex !== null && (
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setPickerSlotIndex(null)} />
+            <div className="relative w-full max-w-4xl bg-white rounded-3xl shadow-2xl overflow-hidden text-black animate-slide-up flex flex-col max-h-[85vh]">
+              <div className="bg-white border-b px-6 py-4 flex items-center justify-between z-10 shrink-0">
+                <h2 className="font-black text-lg uppercase tracking-wider">Select Design for Slot {pickerSlotIndex + 1}</h2>
+                <button onClick={() => setPickerSlotIndex(null)} className="text-neutral-400 hover:text-black text-xl font-bold">�</button>
+              </div>
+              <div className="p-6 overflow-y-auto flex-1 bg-neutral-50 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-4">
+                {products.map(p => (
+                  <button
+                    key={p.id}
+                    onClick={async () => {
+                      const vendorUid = process.env.NEXT_PUBLIC_VENDOR_UID || "CMzpkonBxKeLboaVTUYwDWgiwNG3";
+                      let newIds = (homeContent.featuredProductIds && homeContent.featuredProductIds.length > 0)
+                            ? [...homeContent.featuredProductIds]
+                            : products.slice(0, 10).map(pr => pr.id);
+                      while(newIds.length < 10) newIds.push("");
+                      
+                      newIds[pickerSlotIndex] = p.id;
+                      setHomeContent(prev => ({...prev, featuredProductIds: newIds}));
+                      await setDoc(doc(db, "users", vendorUid, "store_settings", "home_content"), { featuredProductIds: newIds }, { merge: true });
+                      setPickerSlotIndex(null);
+                    }}
+                    className="flex flex-col bg-white border rounded-xl overflow-hidden hover:border-pink-500 hover:ring-2 hover:ring-pink-500/30 transition-all text-left shadow-sm group"
+                  >
+                    <div className="relative aspect-square w-full bg-pink-50">
+                      <Image src={p.imagePath} alt={p.name} fill className="object-cover" sizes="150px" />
+                    </div>
+                    <div className="p-3">
+                      <h3 className="font-bold text-xs truncate group-hover:text-pink-600 transition-colors">{p.name}</h3>
+                      <p className="text-[10px] text-neutral-500">{p.priceOnAsk ? "POA" : `\u20AC${p.basePrice}`}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+</div>
   );
 }
 
