@@ -73,8 +73,8 @@ export default function GlobalHeader() {
           const defaultCore = ['home', 'all', 'special-offers', 'Sets', 'Minis', 'Keychains', 'Earrings', 'Accessories', 'Basics'];
             const validTags = layoutData.order.filter((tag: string) => {
               const collectionMeta = collections.find(c => c.tag.toLowerCase() === tag.toLowerCase());
-              if (defaultCore.includes(tag)) return true;
-              return collectionMeta && collectionMeta.inRibbon !== false;
+              if (defaultCore.map(t => t.toLowerCase()).includes(tag.toLowerCase())) return true;
+              return !!collectionMeta; // Ignore legacy inRibbon flags, just ensure it exists
             });
             setRibbonOrder(validTags);
         } else {
