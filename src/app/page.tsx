@@ -62,6 +62,14 @@ export default function Home() {
     return () => unsubscribe();
   }, []);
 
+    const [allCollections, setAllCollections] = useState<any[]>([]);
+  const [showFeaturePicker, setShowFeaturePicker] = useState(false);
+  const [showEditor, setShowEditor] = useState(false);
+  const [editData, setEditData] = useState<any>(null);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const bgFileRef = useRef<HTMLInputElement>(null);
+  const cardBgFileRef = useRef<HTMLInputElement>(null);
+
   const [homeContent, setHomeContent] = useState({
     heroTitle: "Luxury Hand-Painted<br/>Press-On Nails",
     heroSubtitle: "Salon-quality custom nail sets perfectly sized and delivered directly to your door.",
@@ -71,6 +79,46 @@ export default function Home() {
     newArrivalsSubtitle: "Fresh out of the studio. Grab them before they're gone.",
   });
 
+
+
+  
+  const saveInlineEdits = async () => {
+    if (!adminUser || !editData) return;
+    setSavingEdit(true);
+    try {
+      const vendorUid = process.env.NEXT_PUBLIC_VENDOR_UID || "CMzpkonBxKeLboaVTUYwDWgiwNG3";
+      let newImageUrl = editData.backgroundImageUrl;
+      let newCardImageUrl = editData.cardImageUrl;
+
+      if (bgFileRef.current?.files && bgFileRef.current.files.length > 0) {
+        const file = bgFileRef.current.files[0];
+        const storageRef = ref(storage, `users/${vendorUid}/images/bg_${Date.now()}_${file.name}`);
+        await uploadBytes(storageRef, file);
+        newImageUrl = await getDownloadURL(storageRef);
+      }
+
+      if (cardBgFileRef.current?.files && cardBgFileRef.current.files.length > 0) {
+        const file = cardBgFileRef.current.files[0];
+        const storageRef = ref(storage, `users/${vendorUid}/images/card_${Date.now()}_${file.name}`);
+        await uploadBytes(storageRef, file);
+        newCardImageUrl = await getDownloadURL(storageRef);
+      }
+
+      const updatedMeta = { ...editData, backgroundImageUrl: newImageUrl || '', cardImageUrl: newCardImageUrl || '' };
+      await setDoc(doc(db, 'users', vendorUid, 'collection_settings', editData.tag), updatedMeta, { merge: true });
+      
+      // Update UI state immediately
+      setRibbonCollections((prev: any) => prev.map((c: any) => c.tag === editData.tag ? updatedMeta : c));
+      setAllCollections((prev: any) => prev.map((c: any) => c.tag === editData.tag ? updatedMeta : c));
+      
+      setShowEditor(false);
+    } catch (err) {
+      console.error(err);
+      alert('Failed to save.');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
 
 
   const fetchProducts = async () => {
@@ -88,7 +136,11 @@ export default function Home() {
       }
       
       // Fetch Ribbon Collections
-      const ribbonSnap = await getDocs(query(collection(db, "users", vendorUid, "collection_settings"), where("isFeatured", "==", true)));
+      
+        const allCollSnap = await getDocs(collection(db, "users", vendorUid, "collection_settings"));
+        setAllCollections(allCollSnap.docs.map(d => ({ tag: d.id, ...d.data() })));
+
+        const ribbonSnap = await getDocs(query(collection(db, "users", vendorUid, "collection_settings"), where("isFeatured", "==", true)));
       const ribbons = ribbonSnap.docs.map(d => ({ 
         tag: d.data().tag, 
         title: d.data().title || d.data().tag,
@@ -409,24 +461,47 @@ export default function Home() {
                     
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
                       {ribbonCollections.map((collection: any) => (
-                        <Link key={collection.tag} href={`/collections/${collection.tag}`} className="group relative h-96 rounded-[2rem] overflow-hidden shadow-lg border border-pink-100/50 block transform transition-all duration-500 hover:-translate-y-2 hover:shadow-2xl">
-                          <div className="absolute inset-0 bg-neutral-900 transition duration-700 group-hover:scale-110" style={{ background: `linear-gradient(to bottom right, ${collection.ombreStart || '#f472b6'}, ${collection.ombreEnd || '#000000'})` }}>
-                            {(collection.cardImageUrl || collection.backgroundImageUrl) && (
-                                <div className="absolute inset-0 flex items-center justify-center">
-                                  <div style={{ transform: `scale(${((collection.cardImageUrl ? collection.cardBgScale : collection.bgScale) || 100) / 100})`, width: '100%', height: '100%', position: 'relative' }}>
-                                    <Image src={collection.cardImageUrl || collection.backgroundImageUrl} alt={collection.title || "Background"} fill className="object-contain opacity-60 mix-blend-overlay" />
+                          <div key={collection.tag} className="relative group">
+                            <Link href={`/collections/${collection.tag}`} className="relative h-96 rounded-[2rem] overflow-hidden shadow-lg border border-pink-100/50 block transform transition-all duration-500 hover:-translate-y-2 hover:shadow-2xl z-0">
+                              <div className="absolute inset-0 bg-neutral-900 transition duration-700 group-hover:scale-110" style={{ background: `linear-gradient(to bottom right, ${collection.ombreStart || '#f472b6'}, ${collection.ombreEnd || '#000000'})` }}>
+                                {(collection.cardImageUrl || collection.backgroundImageUrl) && (
+                                  <div className="absolute inset-0 flex items-center justify-center">
+                                    <div style={{ transform: `scale(${((collection.cardImageUrl ? collection.cardBgScale : collection.bgScale) || 100) / 100})`, width: '100%', height: '100%', position: 'relative' }}>
+                                      <Image src={collection.cardImageUrl || collection.backgroundImageUrl} alt={collection.title || "Background"} fill className="object-contain opacity-60 mix-blend-overlay" />
+                                    </div>
                                   </div>
-                                </div>
-                              )}
+                                )}
+                              </div>
+                              <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent"></div>
+                              <div className="absolute inset-x-0 bottom-0 p-8 flex flex-col justify-end h-full z-10">
+                                <span className="text-pink-300 font-bold text-[10px] tracking-widest uppercase mb-2 drop-shadow-md">Collection</span>
+                                <h3 className="text-4xl font-black text-white mb-2 uppercase drop-shadow-lg leading-none" style={{ color: collection.headerColor || '#ffffff' }}>{collection.title}</h3>
+                                <p className="text-neutral-300 font-medium line-clamp-2 text-sm">{collection.description || "View this collection ?"}</p>
+                              </div>
+                            </Link>
+                            {editMode && adminUser && (
+                              <button
+                                onClick={(e) => { e.preventDefault(); e.stopPropagation(); setEditData({ ...collection }); setShowEditor(true); }}
+                                className="absolute top-4 right-4 z-20 bg-black/70 hover:bg-black text-white p-3 rounded-full shadow-lg transition-transform hover:scale-110"
+                                title="Edit Collection"
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" /></svg>
+                              </button>
+                            )}
                           </div>
-                          <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent"></div>
-                          <div className="absolute inset-x-0 bottom-0 p-8 flex flex-col justify-end h-full z-10">
-                            <span className="text-pink-300 font-bold text-[10px] tracking-widest uppercase mb-2 drop-shadow-md">Collection</span>
-                            <h3 className="text-4xl font-black text-white mb-2 uppercase drop-shadow-lg leading-none" style={{ color: collection.headerColor || '#ffffff' }}>{collection.title}</h3>
-                            <p className="text-neutral-300 font-medium line-clamp-2 text-sm">{collection.description || "View this collection →"}</p>
+                        ))}
+
+                        {editMode && adminUser && (
+                          <div 
+                            onClick={() => setShowFeaturePicker(true)}
+                            className="h-96 rounded-[2rem] border-2 border-dashed border-pink-300 hover:border-pink-500 bg-pink-50/50 hover:bg-pink-100 cursor-pointer flex flex-col items-center justify-center transition-all group shadow-sm hover:shadow-md"
+                          >
+                            <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform mb-4">
+                              <span className="text-3xl text-pink-500 font-light">+</span>
+                            </div>
+                            <span className="font-bold text-pink-500 uppercase tracking-widest text-sm text-center px-4">Add Featured<br/>Collection</span>
                           </div>
-                        </Link>
-                      ))}
+                        )}
                     </div>
                   </div>
                 </div>
@@ -518,6 +593,142 @@ export default function Home() {
               )}
             </>
           )}
+
+        {/* Collection Feature Picker Modal */}
+        {showFeaturePicker && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowFeaturePicker(false)} />
+            <div className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden text-black animate-slide-up flex flex-col max-h-[80vh]">
+              <div className="bg-white border-b px-6 py-4 flex items-center justify-between z-10">
+                <h2 className="font-black text-lg uppercase tracking-wider">Feature Collection</h2>
+                <button onClick={() => setShowFeaturePicker(false)} className="text-neutral-400 hover:text-black text-xl font-bold">�</button>
+              </div>
+              <div className="p-4 overflow-y-auto flex-1 bg-neutral-50">
+                {allCollections.filter(c => !c.isFeatured).length === 0 ? (
+                  <div className="text-center p-8 text-neutral-400 font-medium">All available collections are already featured.</div>
+                ) : (
+                  <div className="space-y-2">
+                    {allCollections.filter(c => !c.isFeatured).map(c => (
+                      <button
+                        key={c.tag}
+                        onClick={async () => {
+                          const vendorUid = process.env.NEXT_PUBLIC_VENDOR_UID || "CMzpkonBxKeLboaVTUYwDWgiwNG3";
+                          await setDoc(doc(db, 'users', vendorUid, 'collection_settings', c.tag), { isFeatured: true }, { merge: true });
+                          const updated = { ...c, isFeatured: true };
+                          setRibbonCollections(prev => [...prev, updated] as any);
+                          setAllCollections(prev => prev.map(item => item.tag === c.tag ? updated : item));
+                          setShowFeaturePicker(false);
+                        }}
+                        className="w-full text-left p-4 bg-white border rounded-xl hover:border-pink-300 hover:bg-pink-50 transition-colors flex items-center justify-between group"
+                      >
+                        <div>
+                          <h3 className="font-bold text-lg">{c.title || c.tag}</h3>
+                          {c.description && <p className="text-xs text-neutral-500 line-clamp-1">{c.description}</p>}
+                        </div>
+                        <span className="text-pink-500 font-bold opacity-0 group-hover:opacity-100 transition-opacity">Add +</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Collection Inline Theme Editor Modal */}
+        {showEditor && editData && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowEditor(false)} />
+            <div className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden text-black animate-slide-up flex flex-col max-h-[90vh]">
+              <div className="bg-white border-b px-6 py-4 flex items-center justify-between z-10 shrink-0">
+                <h2 className="font-black text-lg uppercase tracking-wider">Edit Theme</h2>
+                <button onClick={() => setShowEditor(false)} className="text-neutral-400 hover:text-black text-xl font-bold">�</button>
+              </div>
+              <div className="p-6 space-y-6 overflow-y-auto flex-1">
+                
+                {/* Title and Description */}
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold text-neutral-500 uppercase mb-2">Display Title</label>
+                    <input type="text" value={editData.title || ''} onChange={e => setEditData((p: any) => ({ ...p, title: e.target.value }))} className="w-full border-2 border-neutral-200 rounded-xl px-4 py-3 text-sm focus:border-pink-500 focus:outline-none" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-neutral-500 uppercase mb-2">Description</label>
+                    <textarea value={editData.description || ''} onChange={e => setEditData((p: any) => ({ ...p, description: e.target.value }))} rows={2} className="w-full border-2 border-neutral-200 rounded-xl px-4 py-3 text-sm focus:border-pink-500 focus:outline-none resize-none" />
+                  </div>
+                </div>
+
+                {/* Ombre Gradient */}
+                <div>
+                  <label className="block text-xs font-bold text-neutral-500 uppercase mb-2">Background Gradient</label>
+                  <div className="flex items-center gap-3 bg-neutral-50 p-4 rounded-2xl border">
+                    <input type="color" value={editData.ombreStart || '#f472b6'} onChange={e => setEditData((p: any) => ({ ...p, ombreStart: e.target.value }))} className="w-10 h-10 rounded cursor-pointer border-0 p-0" />
+                    <div className="flex-1 h-8 rounded-lg shadow-inner" style={{ background: `linear-gradient(to right, ${editData.ombreStart || '#f472b6'}, ${editData.ombreEnd || '#000000'})` }}></div>
+                    <input type="color" value={editData.ombreEnd || '#000000'} onChange={e => setEditData((p: any) => ({ ...p, ombreEnd: e.target.value }))} className="w-10 h-10 rounded cursor-pointer border-0 p-0" />
+                  </div>
+                </div>
+
+                {/* Splashback Image */}
+                <div>
+                  <label className="block text-xs font-bold text-neutral-500 uppercase mb-2">Collection Page Splashback</label>
+                  <div className="border-2 border-dashed rounded-2xl p-4 bg-neutral-50 space-y-3">
+                    {editData.backgroundImageUrl && (
+                      <div className="relative w-full h-24 rounded-xl overflow-hidden shadow-sm">
+                        <Image src={editData.backgroundImageUrl} alt="Splashback" fill className="object-cover" />
+                      </div>
+                    )}
+                    <input type="file" ref={bgFileRef} accept="image/*" className="text-sm w-full font-medium file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-pink-50 file:text-pink-700 hover:file:bg-pink-100" />
+                    <div>
+                      <label className="block text-xs font-bold text-neutral-500 mb-1">Scale: {editData.bgScale || 100}%</label>
+                      <input type="range" min="10" max="300" value={editData.bgScale || 100} onChange={e => setEditData((p: any) => ({ ...p, bgScale: parseInt(e.target.value) }))} className="w-full accent-pink-500" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Card Image */}
+                <div>
+                  <label className="block text-xs font-bold text-neutral-500 uppercase mb-2">Home Page Card Image</label>
+                  <div className="border-2 border-dashed rounded-2xl p-4 bg-neutral-50 space-y-3">
+                    {editData.cardImageUrl && (
+                      <div className="relative w-full h-24 rounded-xl overflow-hidden shadow-sm">
+                        <Image src={editData.cardImageUrl} alt="Card" fill className="object-contain" />
+                      </div>
+                    )}
+                    <input type="file" ref={cardBgFileRef} accept="image/*" className="text-sm w-full font-medium file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-pink-50 file:text-pink-700 hover:file:bg-pink-100" />
+                    <div>
+                      <label className="block text-xs font-bold text-neutral-500 mb-1">Scale: {editData.cardBgScale || editData.bgScale || 100}%</label>
+                      <input type="range" min="10" max="300" value={editData.cardBgScale || editData.bgScale || 100} onChange={e => setEditData((p: any) => ({ ...p, cardBgScale: parseInt(e.target.value) }))} className="w-full accent-pink-500" />
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Remove from Featured */}
+                <div className="pt-4 border-t border-neutral-100">
+                  <button
+                    onClick={async () => {
+                      const vendorUid = process.env.NEXT_PUBLIC_VENDOR_UID || "CMzpkonBxKeLboaVTUYwDWgiwNG3";
+                      await setDoc(doc(db, 'users', vendorUid, 'collection_settings', editData.tag), { isFeatured: false }, { merge: true });
+                      setRibbonCollections(prev => prev.filter(c => c.tag !== editData.tag) as any);
+                      setAllCollections(prev => prev.map(c => c.tag === editData.tag ? { ...c, isFeatured: false } : c));
+                      setShowEditor(false);
+                    }}
+                    className="w-full py-3 text-red-500 font-bold hover:bg-red-50 rounded-xl transition-colors text-sm"
+                  >
+                    Remove from Featured Collections
+                  </button>
+                </div>
+              </div>
+
+              {/* Save Button */}
+              <div className="shrink-0 bg-white border-t p-4">
+                <button onClick={saveInlineEdits} disabled={savingEdit} className="w-full bg-black text-white py-4 rounded-xl font-black text-sm uppercase tracking-widest hover:bg-neutral-800 disabled:opacity-50 transition-colors">
+                  {savingEdit ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         </main>
 
       </div>{/* end z-10 wrapper */}
