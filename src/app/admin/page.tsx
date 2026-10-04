@@ -12,7 +12,7 @@ interface CollectionMeta {
   tag: string;
   title: string;
   description: string;
-  backgroundImageUrl: string;
+  backgroundImageUrl: string; cardImageUrl?: string; cardBgScale?: number;
   inRibbon?: boolean;
     isFeatured?: boolean;
   headerColor?: string;
@@ -56,6 +56,7 @@ export default function AdminDashboard() {
   const [savingProduct, setSavingProduct] = useState(false);
   
   const bgInputRef = useRef<HTMLInputElement>(null);
+  const cardBgInputRef = useRef<HTMLInputElement>(null);
   const productImgRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -308,15 +309,23 @@ export default function AdminDashboard() {
         bgScale: 100
       };
       let newImageUrl = meta.backgroundImageUrl;
+        let newCardImageUrl = meta.cardImageUrl;
+  
+        if (bgInputRef.current?.files && bgInputRef.current.files.length > 0) {
+          const file = bgInputRef.current.files[0];
+          const storageReference = ref(storage, `users/${STORE_OWNER_UID}/images/bg_${Date.now()}_${file.name}`);
+          await uploadBytes(storageReference, file);
+          newImageUrl = await getDownloadURL(storageReference);
+        }
 
-      if (bgInputRef.current?.files && bgInputRef.current.files.length > 0) {
-        const file = bgInputRef.current.files[0];
-        const storageReference = ref(storage, `users/${STORE_OWNER_UID}/images/bg_${Date.now()}_${file.name}`);
-        await uploadBytes(storageReference, file);
-        newImageUrl = await getDownloadURL(storageReference);
-      }
-
-      const updatedMeta = { ...meta, backgroundImageUrl: newImageUrl || "" };
+        if (cardBgInputRef.current?.files && cardBgInputRef.current.files.length > 0) {
+          const file = cardBgInputRef.current.files[0];
+          const storageReference = ref(storage, `users/${STORE_OWNER_UID}/images/card_${Date.now()}_${file.name}`);
+          await uploadBytes(storageReference, file);
+          newCardImageUrl = await getDownloadURL(storageReference);
+        }
+  
+        const updatedMeta = { ...meta, backgroundImageUrl: newImageUrl || "", cardImageUrl: newCardImageUrl || "" };
       
       if (updatedMeta.tag && updatedMeta.tag !== selectedTag) {
         // They renamed the custom slug!
@@ -761,6 +770,38 @@ export default function AdminDashboard() {
                           </div>
                         </div>
                       </div>
+                        <div>
+                          <label className="block text-xs font-bold text-neutral-500 uppercase mb-2 flex justify-between">
+                            <span>Home Page Featured Card Image</span>
+                            <span className="text-pink-500 font-normal">Optional</span>
+                          </label>
+                          <div className="border-2 border-dashed rounded-2xl p-6 flex flex-col items-center justify-center bg-neutral-50 hover:bg-neutral-100 transition relative overflow-hidden group">
+                            {collectionMetadata[selectedTag]?.cardImageUrl && (
+                              <div className="absolute inset-0 z-0 opacity-50 group-hover:opacity-20 transition flex items-center justify-center">
+                                <div style={{ transform: `scale(${(collectionMetadata[selectedTag]?.cardBgScale || collectionMetadata[selectedTag]?.bgScale || 100) / 100})`, width: '100%', height: '100%', position: 'relative' }}>
+                                  <Image src={collectionMetadata[selectedTag].cardImageUrl} alt="card-bg" fill className="object-contain" />
+                                </div>
+                              </div>
+                            )}
+                            <div className="relative z-10 flex flex-col items-center bg-white/90 backdrop-blur p-4 rounded-xl shadow-sm w-full max-w-sm">
+                              <input type="file" ref={cardBgInputRef} accept="image/*" className="text-sm w-full mb-4" />
+                              
+                              <div className="w-full">
+                                <label className="block text-xs font-bold text-neutral-500 mb-1">Card Image Scale: {collectionMetadata[selectedTag]?.cardBgScale || collectionMetadata[selectedTag]?.bgScale || 100}%</label>
+                                <input 
+                                  type="range" 
+                                  min="10" max="300" 
+                                  value={collectionMetadata[selectedTag]?.cardBgScale || collectionMetadata[selectedTag]?.bgScale || 100}
+                                  onChange={e => setCollectionMetadata(p => ({...p, [selectedTag]: {...(p[selectedTag] || {}), cardBgScale: parseInt(e.target.value), tag: selectedTag}}))}
+                                  className="w-full accent-pink-500"
+                                />
+                              </div>
+                              
+                              <p className="text-[10px] text-neutral-500 mt-3 text-center leading-tight">Different image just for the home page card. Falls back to splashback if empty.</p>
+                            </div>
+                          </div>
+                        </div>
+
                       
                       <div className="pt-4 border-t">
                           <label className="flex items-center gap-3 cursor-pointer p-4 border rounded-xl hover:bg-neutral-50 transition bg-white relative z-10">

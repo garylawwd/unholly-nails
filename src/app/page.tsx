@@ -96,7 +96,9 @@ export default function Home() {
         backgroundImageUrl: d.data().backgroundImageUrl || "",
         ombreStart: d.data().ombreStart || "#f472b6",
         ombreEnd: d.data().ombreEnd || "#000000",
-        bgScale: d.data().bgScale || 100
+        bgScale: d.data().bgScale || 100,
+          cardImageUrl: d.data().cardImageUrl || "",
+          cardBgScale: d.data().cardBgScale || d.data().bgScale || 100
       }));
       setRibbonCollections(ribbons as any);
 
@@ -409,13 +411,13 @@ export default function Home() {
                       {ribbonCollections.map((collection: any) => (
                         <Link key={collection.tag} href={`/collections/${collection.tag}`} className="group relative h-96 rounded-[2rem] overflow-hidden shadow-lg border border-pink-100/50 block transform transition-all duration-500 hover:-translate-y-2 hover:shadow-2xl">
                           <div className="absolute inset-0 bg-neutral-900 transition duration-700 group-hover:scale-110" style={{ background: `linear-gradient(to bottom right, ${collection.ombreStart || '#f472b6'}, ${collection.ombreEnd || '#000000'})` }}>
-                            {collection.backgroundImageUrl && (
-                              <div className="absolute inset-0 flex items-center justify-center">
-                                <div style={{ transform: `scale(${(collection.bgScale || 100) / 100})`, width: '100%', height: '100%', position: 'relative' }}>
-                                  <Image src={collection.backgroundImageUrl} alt={collection.title || "Background"} fill className="object-cover opacity-60 mix-blend-overlay" />
+                            {(collection.cardImageUrl || collection.backgroundImageUrl) && (
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                  <div style={{ transform: `scale(${((collection.cardImageUrl ? collection.cardBgScale : collection.bgScale) || 100) / 100})`, width: '100%', height: '100%', position: 'relative' }}>
+                                    <Image src={collection.cardImageUrl || collection.backgroundImageUrl} alt={collection.title || "Background"} fill className="object-contain opacity-60 mix-blend-overlay" />
+                                  </div>
                                 </div>
-                              </div>
-                            )}
+                              )}
                           </div>
                           <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent"></div>
                           <div className="absolute inset-x-0 bottom-0 p-8 flex flex-col justify-end h-full z-10">

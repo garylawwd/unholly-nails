@@ -326,7 +326,7 @@ export default function CollectionPage() {
           <>
             <div className="absolute inset-0 flex items-center justify-center overflow-hidden">
               <div style={{ transform: `scale(${(collectionInfo?.bgScale || 100) / 100})`, width: '100%', height: '100%', position: 'relative' }}>
-                <Image src={collectionInfo.backgroundImageUrl} alt={collectionInfo?.title || "Background"} fill className="object-cover opacity-50 mix-blend-overlay" priority />
+                <Image src={collectionInfo.backgroundImageUrl} alt={collectionInfo?.title || "Background"} fill className="object-contain opacity-50 mix-blend-overlay" priority />
               </div>
             </div>
             <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/20 to-black/80"></div>
