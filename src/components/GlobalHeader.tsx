@@ -73,19 +73,14 @@ export default function GlobalHeader() {
           const defaultCore = ['home', 'all', 'special-offers', 'Sets', 'Minis', 'Keychains', 'Earrings', 'Accessories', 'Basics'];
             const validTags = layoutData.order.filter((tag: string) => {
               const collectionMeta = collections.find(c => c.tag.toLowerCase() === tag.toLowerCase());
-              if (defaultCore.includes(tag)) {
-                return !(collectionMeta && collectionMeta.inRibbon === false);
-              }
+              if (defaultCore.includes(tag)) return true;
               return collectionMeta && collectionMeta.inRibbon !== false;
             });
             setRibbonOrder(validTags);
         } else {
           // Default fallback that INCLUDES custom pages!
           const defaultCore = ['home', 'special-offers', 'Sets', 'Minis', 'Keychains', 'Earrings', 'Accessories', 'Basics'];
-          const filteredCore = [...defaultCore, 'all'].filter(tag => {
-              const collectionMeta = collections.find(c => c.tag.toLowerCase() === tag.toLowerCase());
-              return !(collectionMeta && collectionMeta.inRibbon === false);
-            });
+          const filteredCore = [...defaultCore, 'all'];
             const customInRibbon = collections.filter(c => c.inRibbon && !defaultCore.includes(c.tag)).map(c => c.tag);
             setRibbonOrder([...filteredCore, ...customInRibbon]);
         }
