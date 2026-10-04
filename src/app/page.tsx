@@ -356,7 +356,7 @@ export default function Home() {
           ) : (
             <>
               {/* Hero Section */}
-              <div className="relative w-full min-h-[70vh] flex flex-col items-center justify-center pt-24 sm:pt-32 pb-16 sm:pb-24">
+              <div className="relative w-full flex flex-col items-center justify-start pt-8 sm:pt-12 pb-16 sm:pb-24">
                 <div className="relative z-10 text-center px-4 max-w-4xl mx-auto flex flex-col items-center">
                   <Image 
                     src="/logo_cropped.png" 
