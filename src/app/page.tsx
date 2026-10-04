@@ -65,6 +65,7 @@ export default function Home() {
     const [allCollections, setAllCollections] = useState<any[]>([]);
   const [showFeaturePicker, setShowFeaturePicker] = useState(false);
   const [pickerSlotIndex, setPickerSlotIndex] = useState<number | null>(null);
+  const [confirmRemoveSlot, setConfirmRemoveSlot] = useState<number | null>(null);
   const [showEditor, setShowEditor] = useState(false);
   const [editData, setEditData] = useState<any>(null);
   const [savingEdit, setSavingEdit] = useState(false);
@@ -574,15 +575,7 @@ export default function Home() {
                                   <div key={`slot-${i}`} className="bg-white/60 backdrop-blur-md rounded-3xl p-4 shadow-sm border border-pink-500 ring-2 ring-pink-500/20 flex flex-col relative group">
                                     <div className="absolute top-2 right-2 flex gap-1 z-30 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
                                       <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); setPickerSlotIndex(i); }} className="bg-black text-white p-2 rounded-full hover:bg-neutral-800 shadow-md" title="Swap Design"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3 h-3"><path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" /></svg></button>
-                                      <button onClick={async (e) => {
-                                        e.preventDefault();
-                                        e.stopPropagation();
-                                        const vendorUid = process.env.NEXT_PUBLIC_VENDOR_UID || "CMzpkonBxKeLboaVTUYwDWgiwNG3";
-                                        const newIds = [...actualIds];
-                                        newIds[i] = "";
-                                        setHomeContent(prev => ({...prev, featuredProductIds: newIds}));
-                                        await setDoc(doc(db, "users", vendorUid, "store_settings", "home_content"), { featuredProductIds: newIds }, { merge: true });
-                                      }} className="bg-red-500 text-white p-2 rounded-full hover:bg-red-600 shadow-md" title="Remove"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3 h-3"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></button>
+                                      <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); setConfirmRemoveSlot(i); }} className="bg-red-500 text-white p-2 rounded-full hover:bg-red-600 shadow-md" title="Remove"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3 h-3"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></button>
                                     </div>
                                     <div className="relative aspect-square overflow-hidden rounded-2xl bg-pink-50 mb-3 cursor-pointer" onClick={() => setEditingProduct(product)}>
                                       <Image src={product.imagePath} alt={product.name} fill className="object-cover" sizes="(max-width: 640px) 50vw, 20vw" />
@@ -792,7 +785,7 @@ export default function Home() {
             <div className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden text-black animate-slide-up flex flex-col max-h-[80vh]">
               <div className="bg-white border-b px-6 py-4 flex items-center justify-between z-10">
                 <h2 className="font-black text-lg uppercase tracking-wider">Feature Collection</h2>
-                <button onClick={() => setShowFeaturePicker(false)} className="text-neutral-400 hover:text-black text-xl font-bold">�</button>
+                <button onClick={() => setShowFeaturePicker(false)} className="text-neutral-400 hover:text-black text-2xl font-bold leading-none">&times;</button>
               </div>
               <div className="p-4 overflow-y-auto flex-1 bg-neutral-50">
                 {allCollections.filter(c => !c.isFeatured).length === 0 ? (
@@ -833,7 +826,7 @@ export default function Home() {
             <div className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden text-black animate-slide-up flex flex-col max-h-[90vh]">
               <div className="bg-white border-b px-6 py-4 flex items-center justify-between z-10 shrink-0">
                 <h2 className="font-black text-lg uppercase tracking-wider">Edit Theme</h2>
-                <button onClick={() => setShowEditor(false)} className="text-neutral-400 hover:text-black text-xl font-bold">�</button>
+                <button onClick={() => setShowEditor(false)} className="text-neutral-400 hover:text-black text-2xl font-bold leading-none">&times;</button>
               </div>
               <div className="p-6 space-y-6 overflow-y-auto flex-1">
                 
@@ -933,7 +926,7 @@ export default function Home() {
             <div className="relative w-full max-w-4xl bg-white rounded-3xl shadow-2xl overflow-hidden text-black animate-slide-up flex flex-col max-h-[85vh]">
               <div className="bg-white border-b px-6 py-4 flex items-center justify-between z-10 shrink-0">
                 <h2 className="font-black text-lg uppercase tracking-wider">Select Design for Slot {pickerSlotIndex + 1}</h2>
-                <button onClick={() => setPickerSlotIndex(null)} className="text-neutral-400 hover:text-black text-xl font-bold">�</button>
+                <button onClick={() => setPickerSlotIndex(null)} className="text-neutral-400 hover:text-black text-2xl font-bold leading-none">&times;</button>
               </div>
               <div className="p-6 overflow-y-auto flex-1 bg-neutral-50 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-4">
                 {products.map(p => (
@@ -962,6 +955,39 @@ export default function Home() {
                     </div>
                   </button>
                 ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+
+
+        {/* Remove Confirmation Modal */}
+        {confirmRemoveSlot !== null && (
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setConfirmRemoveSlot(null)} />
+            <div className="relative w-full max-w-sm bg-white rounded-3xl shadow-2xl overflow-hidden text-black animate-slide-up flex flex-col">
+              <div className="p-6 text-center">
+                <div className="w-16 h-16 bg-red-100 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-8 h-8"><path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" /></svg>
+                </div>
+                <h3 className="text-xl font-black mb-2">Remove Design?</h3>
+                <p className="text-neutral-500 text-sm mb-6">Are you sure you want to clear this slot from New Arrivals?</p>
+                <div className="flex gap-3">
+                  <button onClick={() => setConfirmRemoveSlot(null)} className="flex-1 bg-neutral-100 text-neutral-700 py-3 rounded-xl font-bold hover:bg-neutral-200 transition-colors">Cancel</button>
+                  <button onClick={async () => {
+                    const vendorUid = process.env.NEXT_PUBLIC_VENDOR_UID || "CMzpkonBxKeLboaVTUYwDWgiwNG3";
+                    let newIds = (homeContent.featuredProductIds && homeContent.featuredProductIds.length > 0)
+                          ? [...homeContent.featuredProductIds]
+                          : products.slice(0, 10).map(pr => pr.id);
+                    while(newIds.length < 10) newIds.push("");
+                    
+                    newIds[confirmRemoveSlot] = "";
+                    setHomeContent(prev => ({...prev, featuredProductIds: newIds}));
+                    await setDoc(doc(db, "users", vendorUid, "store_settings", "home_content"), { featuredProductIds: newIds }, { merge: true });
+                    setConfirmRemoveSlot(null);
+                  }} className="flex-1 bg-red-500 text-white py-3 rounded-xl font-bold hover:bg-red-600 transition-colors shadow-md">Remove</button>
+                </div>
               </div>
             </div>
           </div>
