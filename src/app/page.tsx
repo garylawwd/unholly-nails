@@ -580,7 +580,7 @@ export default function Home() {
                                   </div>
                                   <div className="flex flex-col flex-grow px-1 text-center">
                                     <h3 className="text-sm font-black text-neutral-900 truncate mb-0.5">{product.name}</h3>
-                                    <p className="font-bold text-xs text-neutral-500">{product.priceOnAsk ? "POA" : `�${product.basePrice.toFixed(2)}`}</p>
+                                    <p className="font-bold text-xs text-neutral-500">{product.priceOnAsk ? "POA" : `\u20AC${product.basePrice.toFixed(2)}`}</p>
                                   </div>
 {/* Collection Feature Picker Modal */}
         {showFeaturePicker && (
@@ -785,7 +785,7 @@ export default function Home() {
                               <div className="flex flex-col flex-grow px-1">
                                 <h3 className="text-base font-black text-neutral-900 truncate mb-1">{product.name}</h3>
                                 <p className={`font-bold text-sm mb-4 ${product.priceOnAsk ? 'text-[#FF5C9D]' : 'text-neutral-500'}`}>
-                                  {product.priceOnAsk ? "Price on Ask" : `�${product.basePrice.toFixed(2)}`}
+                                  {product.priceOnAsk ? "Price on Ask" : `\u20AC${product.basePrice.toFixed(2)}`}
                                 </p>
                                 <div className="mt-auto">
                                   <button onClick={() => openDrawer(product)} className="w-full bg-white text-black px-4 py-3 rounded-xl text-[10px] font-black transition-colors hover:bg-black hover:text-white uppercase tracking-widest border border-pink-100">Select Options</button>
@@ -863,7 +863,7 @@ export default function Home() {
                 <h2 className="text-2xl font-bold text-[#1A1A1A] mb-1">{selectedProduct.name}</h2>
                 
                 <p className={`text-lg font-medium mb-4 ${selectedProduct.priceOnAsk ? 'text-pink-600 font-bold' : 'text-neutral-600'}`}>
-                  {selectedProduct.priceOnAsk ? "Price on Ask" : `€${selectedProduct.basePrice.toFixed(2)}`}
+                  {selectedProduct.priceOnAsk ? "Price on Ask" : `\u20AC${selectedProduct.basePrice.toFixed(2)}`}
                 </p>
                 {selectedProduct.description && (
                   <p className="text-neutral-500 text-sm leading-relaxed mb-5 whitespace-pre-wrap">
