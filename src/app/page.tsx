@@ -572,7 +572,7 @@ export default function Home() {
                               if (product) {
                                 return (
                                   <div key={`slot-${i}`} className="bg-white/60 backdrop-blur-md rounded-3xl p-4 shadow-sm border border-pink-500 ring-2 ring-pink-500/20 flex flex-col relative group">
-                                    <div className="absolute top-2 right-2 flex gap-1 z-30 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <div className="absolute top-2 right-2 flex gap-1 z-30 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
                                       <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); setPickerSlotIndex(i); }} className="bg-black text-white p-2 rounded-full hover:bg-neutral-800 shadow-md" title="Swap Design"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3 h-3"><path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" /></svg></button>
                                       <button onClick={async (e) => {
                                         e.preventDefault();
