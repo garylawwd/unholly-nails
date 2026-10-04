@@ -64,6 +64,7 @@ export default function Home() {
 
     const [allCollections, setAllCollections] = useState<any[]>([]);
   const [showFeaturePicker, setShowFeaturePicker] = useState(false);
+  const [pickerSlotIndex, setPickerSlotIndex] = useState<number | null>(null);
   const [showEditor, setShowEditor] = useState(false);
   const [editData, setEditData] = useState<any>(null);
   const [savingEdit, setSavingEdit] = useState(false);
@@ -77,7 +78,8 @@ export default function Home() {
     collectionsSubtitle: "Explore our exclusive themed sets hand-painted just for you.",
     newArrivalsTitle: "New Arrivals",
     newArrivalsSubtitle: "Fresh out of the studio. Grab them before they're gone.",
-  });
+      featuredProductIds: [] as string[],
+    });
 
 
 
@@ -724,6 +726,45 @@ export default function Home() {
                 <button onClick={saveInlineEdits} disabled={savingEdit} className="w-full bg-black text-white py-4 rounded-xl font-black text-sm uppercase tracking-widest hover:bg-neutral-800 disabled:opacity-50 transition-colors">
                   {savingEdit ? 'Saving...' : 'Save Changes'}
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Product Slot Picker Modal */}
+        {pickerSlotIndex !== null && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setPickerSlotIndex(null)} />
+            <div className="relative w-full max-w-4xl bg-white rounded-3xl shadow-2xl overflow-hidden text-black animate-slide-up flex flex-col max-h-[85vh]">
+              <div className="bg-white border-b px-6 py-4 flex items-center justify-between z-10 shrink-0">
+                <h2 className="font-black text-lg uppercase tracking-wider">Select Design for Slot {pickerSlotIndex + 1}</h2>
+                <button onClick={() => setPickerSlotIndex(null)} className="text-neutral-400 hover:text-black text-xl font-bold">�</button>
+              </div>
+              <div className="p-6 overflow-y-auto flex-1 bg-neutral-50 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-4">
+                {products.map(p => (
+                  <button
+                    key={p.id}
+                    onClick={async () => {
+                      const vendorUid = process.env.NEXT_PUBLIC_VENDOR_UID || "CMzpkonBxKeLboaVTUYwDWgiwNG3";
+                      const newIds = [...(homeContent.featuredProductIds || [])];
+                      // Fill empty slots up to this index if necessary
+                      while(newIds.length <= pickerSlotIndex) { newIds.push(""); }
+                      newIds[pickerSlotIndex] = p.id;
+                      setHomeContent(prev => ({...prev, featuredProductIds: newIds}));
+                      await setDoc(doc(db, "users", vendorUid, "store_settings", "home_content"), { featuredProductIds: newIds }, { merge: true });
+                      setPickerSlotIndex(null);
+                    }}
+                    className="flex flex-col bg-white border rounded-xl overflow-hidden hover:border-pink-500 hover:ring-2 hover:ring-pink-500/30 transition-all text-left shadow-sm group"
+                  >
+                    <div className="relative aspect-square w-full bg-pink-50">
+                      <Image src={p.imagePath} alt={p.name} fill className="object-cover" sizes="150px" />
+                    </div>
+                    <div className="p-3">
+                      <h3 className="font-bold text-xs truncate group-hover:text-pink-600 transition-colors">{p.name}</h3>
+                      <p className="text-[10px] text-neutral-500">{p.priceOnAsk ? "POA" : `�${p.basePrice}`}</p>
+                    </div>
+                  </button>
+                ))}
               </div>
             </div>
           </div>
