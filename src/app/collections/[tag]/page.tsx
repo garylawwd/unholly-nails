@@ -753,7 +753,7 @@ export default function CollectionPage() {
 
       {/* Admin Inline Theming Modal */}
       {showEditor && editData && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowEditor(false)} />
           <div className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden text-black animate-slide-up">
             <div className="bg-white border-b px-6 py-4 flex items-center justify-between z-10">
@@ -779,10 +779,12 @@ export default function CollectionPage() {
                 </label>
                 <div className="border-2 border-dashed rounded-2xl p-4 bg-neutral-50 space-y-3">
                   {editData.backgroundImageUrl && (
-                    <div className="relative w-full h-32 rounded-xl overflow-hidden shadow-sm">
-                      <Image src={editData.backgroundImageUrl} alt="Current background" fill className="object-cover" />
-                    </div>
-                  )}
+                    <>
+                      <div className="relative w-full h-32 rounded-xl overflow-hidden shadow-sm">
+                        <Image src={editData.backgroundImageUrl} alt="Current background" fill className="object-cover" />
+                      </div>
+                      <button onClick={(e) => { e.preventDefault(); setEditData((p: any) => ({ ...p, backgroundImageUrl: "" })); if(bgFileRef.current) bgFileRef.current.value = ""; }} className="text-red-500 text-xs font-bold mt-1 block">Remove Image</button>
+                    </>)}
                   <input type="file" ref={bgFileRef} accept="image/*" className="text-sm w-full font-medium file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-pink-50 file:text-pink-700 hover:file:bg-pink-100" />
                   <div>
                     <label className="block text-xs font-bold text-neutral-500 mb-1">Background Scale: {editData.bgScale || 100}%</label>

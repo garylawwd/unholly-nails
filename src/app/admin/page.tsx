@@ -749,9 +749,10 @@ export default function AdminDashboard() {
                             <div className="absolute inset-0 z-0 opacity-50 group-hover:opacity-20 transition flex items-center justify-center">
                               <div style={{ transform: `scale(${(collectionMetadata[selectedTag]?.bgScale || 100) / 100})`, width: '100%', height: '100%', position: 'relative' }}>
                                 <Image src={collectionMetadata[selectedTag].backgroundImageUrl} alt="bg" fill className="object-cover" />
+                                </div>
+                                <button onClick={(e) => { e.preventDefault(); setCollectionMetadata(p => ({...p, [selectedTag]: {...(p[selectedTag] || {}), backgroundImageUrl: ""}})); if(bgInputRef.current) bgInputRef.current.value = ""; }} className="absolute bottom-2 right-2 bg-red-500 text-white text-[10px] font-bold px-2 py-1 rounded shadow z-[9999]">Remove</button>
                               </div>
-                            </div>
-                          )}
+                            )}
                           <div className="relative z-10 flex flex-col items-center bg-white/90 backdrop-blur p-4 rounded-xl shadow-sm w-full max-w-sm">
                             <input type="file" ref={bgInputRef} accept="image/*" className="text-sm w-full mb-4" />
                             
@@ -781,6 +782,7 @@ export default function AdminDashboard() {
                                 <div style={{ transform: `scale(${(collectionMetadata[selectedTag]?.cardBgScale || collectionMetadata[selectedTag]?.bgScale || 100) / 100})`, width: '100%', height: '100%', position: 'relative' }}>
                                   <Image src={collectionMetadata[selectedTag].cardImageUrl} alt="card-bg" fill className="object-contain" />
                                 </div>
+                                <button onClick={(e) => { e.preventDefault(); setCollectionMetadata(p => ({...p, [selectedTag]: {...(p[selectedTag] || {}), cardImageUrl: ""}})); if(cardBgInputRef.current) cardBgInputRef.current.value = ""; }} className="absolute bottom-2 right-2 bg-red-500 text-white text-[10px] font-bold px-2 py-1 rounded shadow z-[9999]">Remove</button>
                               </div>
                             )}
                             <div className="relative z-10 flex flex-col items-center bg-white/90 backdrop-blur p-4 rounded-xl shadow-sm w-full max-w-sm">
