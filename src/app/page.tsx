@@ -190,7 +190,21 @@ export default function Home() {
           cardImageUrl: d.data().cardImageUrl || "",
           cardBgScale: d.data().cardBgScale || d.data().bgScale || 100
       }));
-      setRibbonCollections(ribbons as any);
+      
+        const orderSnap = await getDoc(doc(db, 'users', vendorUid, 'store_settings', 'featured_order'));
+        if (orderSnap.exists() && orderSnap.data().order) {
+          const order = orderSnap.data().order;
+          ribbons.sort((a: any, b: any) => {
+            const idxA = order.indexOf(a.tag);
+            const idxB = order.indexOf(b.tag);
+            if (idxA === -1 && idxB === -1) return 0;
+            if (idxA === -1) return 1;
+            if (idxB === -1) return -1;
+            return idxA - idxB;
+          });
+        }
+        setRibbonCollections(ribbons as any);
+
 
       const q = query(collection(db, "users", vendorUid, "nail_sets"), where("isForSale", "==", true));
 
